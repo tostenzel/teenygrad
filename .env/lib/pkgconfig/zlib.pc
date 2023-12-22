@@ -1,0 +1,13 @@
+prefix=/home/tobias/Documents/teenygrad/.env
+exec_prefix=/home/tobias/Documents/teenygrad/.env
+libdir=/home/tobias/Documents/teenygrad/.env/lib
+sharedlibdir=/home/tobias/Documents/teenygrad/.env/lib
+includedir=/home/tobias/Documents/teenygrad/.env/include
+
+Name: zlib
+Description: zlib compression library
+Version: 1.2.13
+
+Requires:
+Libs: -L${libdir} -L${sharedlibdir} -lz
+Cflags: -I${includedir}

@@ -1,34 +1,80 @@
 # inspired by https://github.com/karpathy/micrograd/blob/master/micrograd/engine.py
 from __future__ import annotations
 import time, math
-from typing import List, Tuple, Callable, Optional, ClassVar, Type, Union, Sequence, Any, Iterable, Set
+from typing import List, Tuple, Optional, ClassVar, Type, Union, Sequence, Any, Iterable, Set
 from collections import defaultdict
-from functools import partialmethod, reduce
+from functools import reduce
 from itertools import accumulate
 import numpy as np
 
-from teenygrad.helpers import ImageDType, argfix, make_pair, getenv, IMAGE, DEBUG, flatten, DType, dtypes, prod, all_int, round_up
+from teenygrad.helpers import ImageDType, argfix, make_pair, getenv, DEBUG, flatten, DType, dtypes, prod, all_int, round_up
 from teenygrad.lazy import LazyBuffer
 from teenygrad.ops import Device, LoadOps
-from teenygrad.shape.symbolic import sint
+from teenygrad.shape.symbolic import shape_int
 from teenygrad.realize import run_schedule
 
 class Function:
-  def __init__(self, device:str, *tensors:Tensor):
-    self.device = device
-    self.needs_input_grad = [t.requires_grad for t in tensors]
-    self.requires_grad = True if any(self.needs_input_grad) else None if None in self.needs_input_grad else False
-    if self.requires_grad: self.parents = tensors
+    """Base class for all differentiable operations in an autograd system.
 
-  def forward(self, *args, **kwargs): raise NotImplementedError(f"forward not implemented for {type(self)}")
-  def backward(self, *args, **kwargs): raise RuntimeError(f"backward not implemented for {type(self)}")
+    Attributes:
+        device (str): The device on which the computation is performed.
+        needs_input_grad (list): Indicates whether each input tensor requires gradient computation.
+        requires_grad (bool or None): True if any input tensor requires grad, False otherwise.
+        parents (tuple of Tensor): Input tensors from which this function is derived.
+    """
+    def __init__(self, device:str, *tensors:Tensor):
+      """Initializes the Function with a device and input tensors.
 
-  @classmethod
-  def apply(fxn:Type[Function], *x:Tensor, **kwargs) -> Tensor:
-    ctx = fxn(x[0].device, *x)
-    ret = Tensor(ctx.forward(*[t.lazydata for t in x], **kwargs), device=ctx.device, requires_grad=ctx.requires_grad)
-    if ctx.requires_grad and not Tensor.no_grad: ret._ctx = ctx    # used by autograd engine
-    return ret
+      Args:
+          device (str): The device on which to perform computations.
+          *tensors (Tensor): Variable number of Tensor objects as inputs.
+      """
+      self.device = device
+      # List to store if each tensor requires gradient computation
+      self.needs_input_grad = [t.requires_grad for t in tensors]
+      # Determine if this function requires gradient computation
+      self.requires_grad = True if any(self.needs_input_grad) else None if None in self.needs_input_grad else False
+      # Store parent tensors if gradients are needed
+      if self.requires_grad:
+          self.parents = tensors
+
+    def forward(self, *args, **kwargs):
+        """Forward pass of the function. Should be implemented by subclasses.
+
+        Raises:
+            NotImplementedError: If the method is not overridden in subclasses.
+        """
+        raise NotImplementedError(f"forward not implemented for {type(self)}")
+
+    def backward(self, *args, **kwargs):
+        """Backward pass (gradient computation) of the function. Should be implemented by subclasses.
+
+        Raises:
+            RuntimeError: If the method is not overridden in subclasses.
+        """
+        raise RuntimeError(f"backward not implemented for {type(self)}")
+
+
+    @classmethod
+    def apply(fxn:Type[Function], *x:Tensor, **kwargs) -> Tensor:
+        """Apply the function to the given tensors and return the result.
+
+        Args:
+            fxn (Type[Function]): The function class to be applied.
+            *x (Tensor): Input tensors for the function.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Tensor: The result of applying the function.
+        """
+        # Create a context (an instance of the function) for the computation
+        ctx = fxn(x[0].device, *x)
+        # Compute the forward pass
+        ret = Tensor(ctx.forward(*[t.lazydata for t in x], **kwargs), device=ctx.device, requires_grad=ctx.requires_grad)
+        # If gradients are required and global gradient computation is not turned off, store the context
+        if ctx.requires_grad and not Tensor.no_grad:
+            ret._ctx = ctx  # Context is stored for use by the autograd engine
+        return ret
 
 import teenygrad.mlops as mlops
 
@@ -86,7 +132,7 @@ class Tensor:
   def device(self) -> str: return self.lazydata.device
 
   @property
-  def shape(self) -> Tuple[sint, ...]: return self.lazydata.shape
+  def shape(self) -> Tuple[shape_int, ...]: return self.lazydata.shape
 
   @property
   def dtype(self) -> DType: return self.lazydata.dtype
@@ -131,12 +177,6 @@ class Tensor:
     if self.grad: ret.grad = self.grad.to(device)
     return ret
 
-  def to_(self, device:Optional[str]):
-    if device is None or device == self.device: return
-    if self.grad: self.grad = self.grad.to_(device)
-    _ret = Tensor(self.lazydata, device)
-    self.lazydata = _ret.lazydata
-
   # ***** creation llop entrypoint *****
 
   @staticmethod
@@ -160,7 +200,7 @@ class Tensor:
   # ***** creation helper functions *****
 
   @staticmethod
-  def full(shape:Tuple[sint, ...], fill_value, **kwargs): return Tensor(fill_value, **kwargs).reshape([1]*len(new_shape := argfix(shape))).expand(new_shape)
+  def full(shape:Tuple[shape_int, ...], fill_value, **kwargs): return Tensor(fill_value, **kwargs).reshape([1]*len(new_shape := argfix(shape))).expand(new_shape)
 
   @staticmethod
   def zeros(*shape, **kwargs): return Tensor.full(argfix(*shape), 0, **kwargs)
@@ -202,22 +242,6 @@ class Tensor:
 
   @staticmethod
   def scaled_uniform(*shape, **kwargs) -> Tensor: return Tensor.uniform(*shape, low=-1.0, high=1.0, **kwargs).mul(prod(shape)**-0.5)
-
-  # https://www.tensorflow.org/api_docs/python/tf/keras/initializers/GlorotUniform
-  @staticmethod
-  def glorot_uniform(*shape, **kwargs) -> Tensor: return Tensor.uniform(*shape, low=-1.0, high=1.0, **kwargs).mul((6/(shape[0]+prod(shape[1:])))**0.5)
-
-  # https://pytorch.org/docs/stable/_modules/torch/nn/init.html#kaiming_uniform_
-  @staticmethod
-  def kaiming_uniform(*shape, a:float = 0.01, **kwargs) -> Tensor:
-    bound = math.sqrt(3.0) * math.sqrt(2.0 / (1 + a ** 2)) / math.sqrt(prod(shape[1:]))
-    return Tensor.uniform(*shape, low=-bound, high=bound, **kwargs)
-
-  # https://pytorch.org/docs/stable/_modules/torch/nn/init.html#kaiming_normal_
-  @staticmethod
-  def kaiming_normal(*shape, a:float = 0.01, **kwargs) -> Tensor:
-    std = math.sqrt(2.0 / (1 + a ** 2)) / math.sqrt(prod(shape[1:]))
-    return Tensor.normal(*shape, mean=0.0, std=std, **kwargs)
 
   def multinomial(self:Tensor, num_samples:int = 1, replacement:bool = False) -> Tensor:
     assert 1 <= self.ndim <= 2 and num_samples > 0, f"{self.ndim=} must be 1 or 2 dim, {num_samples=} must be positive"
@@ -267,7 +291,7 @@ class Tensor:
   def expand(self, shape, *args) -> Tensor: return mlops.Expand.apply(self, shape=tuple([x if x != -1 else s for s,x in zip(self.shape, argfix(shape, *args))]))
   def permute(self, order, *args) -> Tensor: return mlops.Permute.apply(self, order=argfix(order, *args))
   def flip(self, axis, *args) -> Tensor: return mlops.Flip.apply(self, axis=[x if x >= 0 else x+len(self.shape) for x in argfix(axis, *args)])
-  def shrink(self, arg:Tuple[Optional[Tuple[sint, sint]], ...]) -> Tensor: return mlops.Shrink.apply(self, arg=tuple(x if x is not None else (0,s) for x,s in zip(arg, self.shape))) if any(x is not None and x != (0,s) for x,s in zip(arg, self.shape)) else self
+  def shrink(self, arg:Tuple[Optional[Tuple[shape_int, shape_int]], ...]) -> Tensor: return mlops.Shrink.apply(self, arg=tuple(x if x is not None else (0,s) for x,s in zip(arg, self.shape))) if any(x is not None and x != (0,s) for x,s in zip(arg, self.shape)) else self
   def pad(self, arg:Tuple[Optional[Tuple[int, int]], ...], value:float=0.0) -> Tensor:
     if all(x is None or x == (0,0) for x in arg): return self
     ret = mlops.Pad.apply(self, arg=(narg:=tuple(x if x is not None else (0,0) for x in arg)))
@@ -369,7 +393,7 @@ class Tensor:
   def __setitem__(self,s,v): return self.__getitem__(s).assign(v)
 
   # NOTE: using slice is discouraged and things should migrate to pad and shrink
-  def slice(self, arg:Sequence[Optional[Tuple[int, sint]]], value:float=0) -> Tensor:
+  def slice(self, arg:Sequence[Optional[Tuple[int, shape_int]]], value:float=0) -> Tensor:
     arg_ = tuple([a if a is not None else (0,s) for s,a in zip(self.shape, arg)])
     padding = tuple([(max(0, -p[0]), max(0, p[1]-self.shape[i])) for i,p in enumerate(arg_)])
     return self.pad(padding, value=value).shrink(tuple([(p[0] + padding[i][0], p[1] + padding[i][0]) for i,p in enumerate(arg_)]))
@@ -485,7 +509,7 @@ class Tensor:
 
   # ***** processing ops *****
 
-  def _pool(self, k_:Tuple[sint, ...], stride:Union[Tuple[int, ...], int]=1, dilation:Union[Tuple[int, ...], int]=1) -> Tensor:
+  def _pool(self, k_:Tuple[shape_int, ...], stride:Union[Tuple[int, ...], int]=1, dilation:Union[Tuple[int, ...], int]=1) -> Tensor:
     assert len(self.shape) >= len(k_), f"can't pool {self.shape} with {k_}"
     assert all_int(self.shape) and all_int(k_), f"does not support symbolic {self.shape=}, {k_=}"
     s_, d_ = make_pair(stride, len(k_)), make_pair(dilation, len(k_))
@@ -515,18 +539,6 @@ class Tensor:
   def avg_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return self._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).mean(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
   def max_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return self._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).max(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
 
-  def conv_transpose2d(self, weight:Tensor, bias:Optional[Tensor]=None, groups=1, stride=1, dilation=1, padding=0, output_padding=0) -> Tensor:
-    HW, trailing = weight.shape[2:], list(range(3, len(weight.shape)+1))
-    x, w = self, weight.reshape(groups, weight.shape[0]//groups, weight.shape[1], *weight.shape[2:]).permute(0,2,1,*trailing).flip(trailing)
-    stride = make_pair(stride, len(HW))
-    if any(s>1 for s in stride):
-      x = x.reshape(*x.shape[:2], *flatten((k,1) for k in x.shape[2:]))
-      x = x.pad(((0,0), (0,0), *flatten(((0,0),(0,s-1)) for s in stride)))
-      x = x.reshape(*x.shape[:2], *[k*s for k,s in zip(x.shape[2::2], stride)])
-      x = x.shrink(((0,x.shape[0]), (0,x.shape[1]), *[(0,k-(s-1)) for k,s in zip(x.shape[2:], stride)]))
-    padding = flatten((((k-1)*d-p,(k-1)*d-p+op) for k,d,p,op in reversed(list(zip(HW, make_pair(dilation, len(HW)), make_pair(padding, len(HW)), make_pair(output_padding, len(HW)))))))
-    return x.conv2d(w.reshape(w.shape[0]*w.shape[1],*w.shape[2:]), groups=groups, bias=bias, dilation=dilation, padding=padding)
-
   wino = int(getenv("WINO", "0"))
   def conv2d(self, weight:Tensor, bias:Optional[Tensor]=None, groups=1, stride=1, dilation=1, padding=0) -> Tensor:
     (bs,cin_), (cout,cin), HW = self.shape[:2], weight.shape[:2], weight.shape[2:]
@@ -544,32 +556,6 @@ class Tensor:
       # conv! broadcasted to (bs, groups, rcout, *oyx, cin, *HW)
       ret = (x * weight.reshape(1, groups, rcout, *[1] * len(oyx), cin, *HW)).sum([-1-i for i in range(1+len(oyx))], keepdim=True).reshape(bs, cout, *oyx)
       return ret if bias is None else ret.add(bias.reshape(1, -1, *[1] * len(HW)))
-
-    # winograd conv 3 kernel f(4x4,3x3) see: http://arxiv.org/abs/1509.09308
-    def apply_matrix(mat, t, dim=0): return t if dim == len(HW) else Tensor.stack([apply_matrix(mat, sum(mm*t[j] for j,mm in enumerate(m) if mm), dim=dim+1) for m in mat])
-    HWI, HWO = (6,) * len(HW), (4,) * len(HW)  # F(4x4,3x3) winograd tiles
-    winograd_Bt = [[4, 0, -5, 0, 1, 0], [0, -4, -4, 1, 1, 0], [0, 4, -4, -1, 1, 0], [0, -2, -1, 2, 1, 0], [0, 2, -1, -2, 1, 0], [0, 4, 0, -5, 0, 1]]
-    winograd_G = [[1/4, 0, 0], [-1/6, -1/6, -1/6], [-1/6, 1/6, -1/6], [1/24, 1/12, 1/6], [1/24, -1/12, 1/6], [0, 0, 1]]
-    winograd_At = [[1, 1, 1, 1, 1, 0], [0, 1, -1, 2, -2, 0], [0, 1, 1, 4, 4, 0], [0, 1, -1, 8, -8, 1]]  # applying At in pre-order almost doubles compilation time
-
-    # todo: stride == dilation
-    # use padding to round up to 4x4 output tiles
-    d = self.pad2d(sum([[padding_[i*2], padding_[i*2+1] + (-(dim + sum(padding_[i * 2:(i + 1) * 2]) - 2) % 4)] for i, dim in enumerate(self.shape[-len(HW):])], []))._pool(HWI, HWO)  # (bs, cin_, tyx, HWI)
-    d = d.permute(*range(len(d.shape)-len(HW),len(d.shape)), *range(len(d.shape)-len(HW))).contiguous_backward()  # move HW to the front: # (HWI, bs, cin_, tyx)
-    tyx = d.shape[-len(HWI):]  # dim of tiling
-
-    g = weight.permute(*range(len(weight.shape)-len(HW),len(weight.shape)), *range(len(weight.shape)-len(HW)))  # move HW to the front
-
-    # compute 6x6 winograd tiles: GgGt, BtdB
-    gfactors = apply_matrix(winograd_G, g).contiguous().reshape(*HWI, 1, groups, rcout, cin, *([1]*len(tyx)))  # (HWI, groups * rcout, cin) -> (HWI, bs=1, groups, rcout, cin, tyx=(1,1))
-    dfactors = apply_matrix(winograd_Bt, d).contiguous().reshape(*HWI, bs, groups, 1, cin, *tyx)  # (HWI, bs, cin_, tyx) -> (HWI, bs, groups, 1 ,cin, *tyx)
-
-    ret = apply_matrix(winograd_At, (gfactors * dfactors).sum(axis=-1-len(HW)))  # matmul; sum across cin: (HWI, bs, groups, rcout, *tyx); then HWI -> HWO: (HWO, bs, groups, rcout, *tyx)
-
-    ret = ret.permute([*range(len(HW), len(ret.shape)-len(HW)), *[i+o for i in range(len(HW)) for o in [len(ret.shape)-len(HW),0]]])  # interleave tyx and HWO: (bs, groups, rcout, oy, HO, ox, WO)
-    ret = ret.reshape(bs, cout, *[c * HWO[i] for i, c in enumerate(tyx)]).shrink(tuple((0, s) for s in [bs, cout, *oyx]))  # merge groups and rcout, tyx and HWO: (bs, groups, cout, *yx), shrink to final
-
-    return (ret if bias is None else ret.add(bias.reshape(1, -1, *[1 for _ in range(len(HW))]))).contiguous().contiguous_backward()
 
   def dot(self, w:Tensor) -> Tensor:
     n1, n2 = len(self.shape), len(w.shape)
@@ -592,65 +578,20 @@ class Tensor:
     def fix(x:Tensor): return x.reshape(*ret.shape[0:-2], ret.shape[-2] * ret.shape[-1])[..., -self.shape[axis]:].transpose(axis,-1)
     return fix(ret) + fix(base_add)
 
-  @staticmethod
-  def _tri(r:int, c:int, k:int=0, **kwargs) -> Tensor: return Tensor.arange(r, **kwargs).unsqueeze(1).expand(r,c) <= Tensor.arange(-k, c-k, **kwargs).unsqueeze(0).expand(r,c)
-  def triu(self, k:int=0) -> Tensor:
-    assert all_int(self.shape), f"does not support symbolic shape {self.shape}"
-    return Tensor._tri(self.shape[-2], self.shape[-1], k=k, dtype=self.dtype, device=self.device).where(self, Tensor.zeros_like(self))
-  def tril(self, k:int=0) -> Tensor:
-    assert all_int(self.shape), f"does not support symbolic shape {self.shape}"
-    return Tensor._tri(self.shape[-2], self.shape[-1], k=k+1, dtype=self.dtype, device=self.device).where(Tensor.zeros_like(self), self)
-
   # ***** mlops (unary) *****
 
   def neg(self): return mlops.Neg.apply(self)
   def contiguous(self): return mlops.Contiguous.apply(self)
   def contiguous_backward(self): return mlops.ContiguousBackward.apply(self)
   def log(self): return mlops.Log.apply(self)
-  def log2(self): return mlops.Log.apply(self)/math.log(2)
   def exp(self): return mlops.Exp.apply(self)
-  def exp2(self): return mlops.Exp.apply(self*math.log(2))
   def relu(self): return mlops.Relu.apply(self)
   def sigmoid(self): return mlops.Sigmoid.apply(self)
-  def sin(self): return mlops.Sin.apply(self)
   def sqrt(self): return mlops.Sqrt.apply(self)
-  def rsqrt(self): return (1/self).sqrt()
-  def cos(self): return ((math.pi/2)-self).sin()
-  def tan(self): return self.sin() / self.cos()
 
   # ***** math functions (unary) *****
 
-  def trunc(self: Tensor) -> Tensor: return self.cast(dtypes.int32).contiguous().cast(self.dtype)
-  def ceil(self: Tensor) -> Tensor: return (self > (b := self.trunc())).where(b+1, b)
-  def floor(self: Tensor) -> Tensor: return (self < (b := self.trunc())).where(b-1, b)
-
-  def square(self): return self*self
-  def clip(self, min_, max_): return self.maximum(min_).minimum(max_)
-  def abs(self): return self.relu() + (-self).relu()
-  def sign(self): return self / (self.abs() + 1e-10)
-  def reciprocal(self): return 1.0/self
-
   # ***** activation functions (unary) *****
-
-  def elu(self, alpha=1.0): return self.relu() - alpha*(1-self.exp()).relu()
-  def celu(self, alpha=1.0): return self.maximum(0) + (alpha * ((self / alpha).exp() - 1)).minimum(0)
-  def swish(self): return self * self.sigmoid()
-  def silu(self): return self.swish()   # The SiLU function is also known as the swish function.
-  def relu6(self): return self.relu() - (self-6).relu()
-  def hardswish(self): return self * (self+3).relu6() * (1/6)
-  def tanh(self): return 2.0 * ((2.0 * self).sigmoid()) - 1.0
-  def sinh(self): return (self.exp() - self.neg().exp()) / 2
-  def cosh(self): return (self.exp() + self.neg().exp()) / 2
-  def atanh(self): return ((1 + self)/(1 - self)).log() / 2
-  def asinh(self): return (self + (self.square() + 1).sqrt()).log()
-  def acosh(self): return (self + (self.square() - 1).sqrt()).log()
-  def hardtanh(self, min_val=-1, max_val=1): return self.clip(min_val, max_val)
-  def gelu(self): return 0.5 * self * (1 + (self * 0.7978845608 * (1 + 0.044715 * self * self)).tanh())
-  def quick_gelu(self): return self * (self * 1.702).sigmoid()
-  def leakyrelu(self, neg_slope=0.01): return self.relu() - (-neg_slope*self).relu()
-  def mish(self): return self * self.softplus().tanh()
-  def softplus(self, beta=1): return (1/beta) * (1 + (self*beta).exp()).log()
-  def softsign(self): return self / (1 + self.abs())
 
   # ***** broadcasted binary mlops *****
 
@@ -759,30 +700,6 @@ class Tensor:
     x = self.mul(weight) if len(weight.shape) == 1 else self.dot(weight)
     return x.add(bias) if bias is not None else x
 
-  def sequential(self, ll:List[Callable[[Tensor], Tensor]]): return reduce(lambda x,f: f(x), ll, self)
-
-  def layernorm(self, axis=-1, eps:float=1e-5) -> Tensor:
-    y = (self - self.mean(axis, keepdim=True))
-    return y.mul((y*y).mean(axis, keepdim=True).add(eps).rsqrt())
-
-  def batchnorm(self, weight:Optional[Tensor], bias:Optional[Tensor], mean:Tensor, invstd:Tensor) -> Tensor:
-    x = (self - mean.reshape(shape=[1, -1, 1, 1]))
-    if weight: x = x * weight.reshape(shape=[1, -1, 1, 1])
-    ret = x.mul(invstd.reshape(shape=[1, -1, 1, 1]) if len(invstd.shape) == 1 else invstd)
-    return (ret + bias.reshape(shape=[1, -1, 1, 1])) if bias else ret
-
-  def dropout(self, p=0.5) -> Tensor:
-    if not Tensor.training or p == 0: return self
-    mask = (Tensor.rand(*self.shape, requires_grad=False, device=self.device) >= p).cast(dtypes.bool)
-    return self * mask * (1/(1.0 - p))
-
-  def scaled_dot_product_attention(self, key:Tensor, value:Tensor, attn_mask:Optional[Tensor]=None, dropout_p:float=0.0, is_causal:bool=False) -> Tensor:
-    # NOTE: it works if key, value have symbolic shape
-    assert all_int(self.shape), f"does not support symbolic shape {self.shape}"
-    if is_causal: attn_mask = Tensor.ones(self.shape[-2], key.shape[-2], requires_grad=False, device=self.device).tril(0).cast(dtypes.bool)
-    if attn_mask is not None and attn_mask.dtype == dtypes.bool: attn_mask = (attn_mask == 0).where(-float("inf"), attn_mask)
-    return (self @ key.transpose(-2,-1) / math.sqrt(self.shape[-1]) + attn_mask).softmax(-1).dropout(dropout_p) @ value
-
   def binary_crossentropy(self, y:Tensor) -> Tensor:
     return (-y*self.log() - (1-y)*(1-self).log()).mean()
 
@@ -809,16 +726,7 @@ class Tensor:
 
   @property
   def ndim(self) -> int: return len(self.shape)
-  def numel(self) -> sint: return prod(self.shape)
+  def numel(self) -> shape_int: return prod(self.shape)
   def element_size(self) -> int: return self.dtype.itemsize
   def nbytes(self) -> int: return self.numel() * self.element_size()
   def is_floating_point(self) -> bool: return dtypes.is_float(self.dtype)
-
-# register functions to move between devices
-for device in Device._buffers: setattr(Tensor, f"{device.lower()}", partialmethod(Tensor.to, device))
-
-if IMAGE:
-  # if IMAGE>0 we install these replacement functions in Tensor (hack!)
-  from teenygrad.features.image import image_conv2d, image_dot
-  setattr(Tensor, "conv2d", image_conv2d)
-  setattr(Tensor, "dot", image_dot)

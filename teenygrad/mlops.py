@@ -4,66 +4,97 @@ from teenygrad.helpers import argsort, DType
 from teenygrad.ops import UnaryOps, BinaryOps, TernaryOps, ReduceOps
 from teenygrad.tensor import Function
 from teenygrad.lazy import LazyBuffer
-from teenygrad.shape.symbolic import sint
+from teenygrad.shape.symbolic import shape_int
 
 class Contiguous(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer: return x.contiguous()
-  def backward(self, grad_output:LazyBuffer) -> LazyBuffer: return grad_output
+    """
+    Ensures that the data within the LazyBuffer is contiguous.
+    """
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        return x.contiguous()
+
+    def backward(self, grad_output: LazyBuffer) -> LazyBuffer:
+        return grad_output
+
 
 class ContiguousBackward(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer: return x
-  def backward(self, grad_output:LazyBuffer) -> LazyBuffer: return grad_output.contiguous()
+    """
+    Handles backward operation ensuring data is contiguous.
+    """
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        return x
+
+    def backward(self, grad_output: LazyBuffer) -> LazyBuffer:
+        return grad_output.contiguous()
+    
 
 class Cast(Function):
-  def forward(self, x:LazyBuffer, dtype:DType, bitcast:bool=False) -> LazyBuffer:
-    self.input_dtype, self.bitcast = x.dtype, bitcast
-    return x.cast(dtype, bitcast)
+    """
+    Handles casting of LazyBuffer to a different data type.
+    """
+    def forward(self, x: LazyBuffer, dtype: DType, bitcast: bool = False) -> LazyBuffer:
+        self.input_dtype, self.bitcast = x.dtype, bitcast
+        return x.cast(dtype, bitcast)
 
-  def backward(self, grad_output:LazyBuffer) -> LazyBuffer:
-    return grad_output.cast(self.input_dtype, self.bitcast)
+    def backward(self, grad_output: LazyBuffer) -> LazyBuffer:
+        return grad_output.cast(self.input_dtype, self.bitcast)
+
 
 # ************* unary ops *************
 
 class Zero(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer: return x.const(0)
-  def backward(self, grad:LazyBuffer) -> LazyBuffer: return grad.const(0)
+    """
+    Represents a function that returns zero regardless of the input.
+    """
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        return x.const(0)
+
+    def backward(self, grad: LazyBuffer) -> LazyBuffer:
+        return grad.const(0)
+
 
 class Neg(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer: return x.e(UnaryOps.NEG)
-  def backward(self, grad:LazyBuffer) -> LazyBuffer: return grad.e(UnaryOps.NEG)
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        return x.e(UnaryOps.NEG)
+
+    def backward(self, grad: LazyBuffer) -> LazyBuffer:
+        return grad.e(UnaryOps.NEG)
+
 
 class Sin(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer:
-    self.x = x
-    return x.e(UnaryOps.SIN)
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        self.x = x
+        return x.e(UnaryOps.SIN)
 
-  def backward(self, grad:LazyBuffer) -> LazyBuffer:
-    return self.x.const(math.pi / 2).e(BinaryOps.SUB, self.x).e(UnaryOps.SIN).e(BinaryOps.MUL, grad)
+    def backward(self, grad: LazyBuffer) -> LazyBuffer:
+        return self.x.const(math.pi / 2).e(BinaryOps.SUB, self.x).e(UnaryOps.SIN).e(BinaryOps.MUL, grad)
 
-# NOTE: maximum(x, 0) behaves differently where x=0
+
 class Relu(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer:
-    self.ret = x.e(BinaryOps.MAX, x.const(0))
-    return self.ret
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        self.ret = x.e(BinaryOps.MAX, x.const(0))
+        return self.ret
 
-  def backward(self, grad_output:LazyBuffer) -> LazyBuffer:
-    return self.ret.const(0).e(BinaryOps.CMPLT, self.ret).e(BinaryOps.MUL, grad_output)
+    def backward(self, grad_output: LazyBuffer) -> LazyBuffer:
+        return self.ret.const(0).e(BinaryOps.CMPLT, self.ret).e(BinaryOps.MUL, grad_output)
+
 
 class Log(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer:
-    self.x = x
-    return x.e(UnaryOps.LOG2).e(BinaryOps.MUL, x.const(math.log(2)))
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        self.x = x
+        return x.e(UnaryOps.LOG2).e(BinaryOps.MUL, x.const(math.log(2)))
 
-  def backward(self, grad_output:LazyBuffer) -> LazyBuffer:
-    return grad_output.e(BinaryOps.DIV, self.x)
+    def backward(self, grad_output: LazyBuffer) -> LazyBuffer:
+        return grad_output.e(BinaryOps.DIV, self.x)
+
 
 class Exp(Function):
-  def forward(self, x:LazyBuffer) -> LazyBuffer:
-    self.ret = x.e(BinaryOps.MUL, x.const(1/math.log(2))).e(UnaryOps.EXP2)
-    return self.ret
+    def forward(self, x: LazyBuffer) -> LazyBuffer:
+        self.ret = x.e(BinaryOps.MUL, x.const(1/math.log(2))).e(UnaryOps.EXP2)
+        return self.ret
 
-  def backward(self, grad_output:LazyBuffer) -> LazyBuffer:
-    return self.ret.e(BinaryOps.MUL, grad_output)
+    def backward(self, grad_output: LazyBuffer) -> LazyBuffer:
+        return self.ret.e(BinaryOps.MUL, grad_output)
 
 class Sqrt(Function):
   def forward(self, x:LazyBuffer) -> LazyBuffer:
@@ -127,6 +158,7 @@ class Div(Function):
 # ************* ternary ops *************
 
 class Where(Function):
+  """Ternary conditional operation."""
   def forward(self, x:LazyBuffer, y:LazyBuffer, z:LazyBuffer) -> LazyBuffer:
     self.x = x
     return x.e(TernaryOps.WHERE, y, z)
@@ -193,7 +225,8 @@ class Pad(Function):
     return grad_output.shrink(self.narg)
 
 class Shrink(Function):
-  def forward(self, x:LazyBuffer, arg:Tuple[Tuple[sint, sint], ...]) -> LazyBuffer:
+  """Shrink operation."""
+  def forward(self, x:LazyBuffer, arg:Tuple[Tuple[shape_int, shape_int], ...]) -> LazyBuffer:
     self.narg = tuple([(p[0], s-p[1]) for s,p in zip(x.shape, arg)])
     return x.shrink(arg)
 
@@ -201,11 +234,3 @@ class Shrink(Function):
     assert all(isinstance(x[0], int) and isinstance(x[1], int) for x in self.narg), "symbolic shrink does not support backward"
     # need this cast because mypy cannot narrow the type even with assert
     return grad_output.pad(cast(Tuple[Tuple[int, int], ...], self.narg))
-
-class Flip(Function):
-  def forward(self, x:LazyBuffer, axis:Tuple[int, ...]) -> LazyBuffer:
-    self.arg = tuple([-1 if i in set(axis) else 1 for i in range(len(x.shape))])
-    return x.stride(self.arg)
-
-  def backward(self, grad_output:LazyBuffer) -> LazyBuffer:
-    return grad_output.stride(self.arg)

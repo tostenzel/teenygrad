@@ -1,1 +1,1 @@
-sint = int
+shape_int = int
