@@ -1,38 +1,53 @@
-from __future__ import annotations
-from teenygrad.helpers import DType, dtypes, DEBUG
-from teenygrad.ops import UnaryOps, BinaryOps, ReduceOps, TernaryOps, LoadOps
+"""This module defines the TensorData class, a container for tensor data represented as numpy arrays. It facilitates direct
+manipulation of tensor data through a range of operations executed immediately on the CPU using numpy. This approach
+contrasts with deferred computation models.
+
+"""
+from typing import Tuple
 import numpy as np
+from teenygrad.ops import UnaryOps, BinaryOps, TernaryOps, ReduceOps, LoadOps
+from teenygrad.helpers import DType, dtypes, DEBUG
 
 
 class TensorData:
-    """Class representing a buffer that delays computation until necessary (lazy evaluation)."""
+    """A class that encapsulates numpy array data and provides methods for direct tensor operations."""
 
     def __init__(self, data: np.ndarray):
-        """Initialize the LazyBuffer with a numpy array."""
+        """Initialize the TensorData with a numpy array."""
         self.data = data
 
     @property
-    def dtype(self):
-        """Returns the data type of the buffer."""
+    def dtype(self) -> DType:
+        """Return the data type of the numpy array."""
         return dtypes.from_np(self.data.dtype)
 
     @property
-    def shape(self):
-        """Returns the shape of the numpy array."""
+    def shape(self) -> Tuple[int, ...]:
+        """Return the shape of the numpy array."""
         return self.data.shape
 
-    def __repr__(self):
-        return f"<TD {self.shape} {self.dtype}>"
-
-    def is_unrealized_contiguous_const(self):
-        """Checks if the buffer is an unrealized contiguous constant."""
-        return False
+    def __repr__(self) -> str:
+        """Return a string representation of the TensorData object."""
+        return f"<TensorData shape={self.shape} dtype={self.dtype}>"
 
     @staticmethod
-    def loadop(op, shape, dtype, arg=None, src=None) -> TensorData:
+    def loadop(op: LoadOps, shape: Tuple[int, ...], dtype: DType, arg=None) -> 'TensorData':
         """
-        Load operation for creating a LazyBuffer based on specified operation. 
-        Supported operations: RAND, CONST, EMPTY.
+        Create a TensorData object based on a specific loading operation.
+
+        Supported operations include creating random data, constant data, or empty data.
+
+        Args:
+            op (LoadOps): The operation type (e.g., RAND, CONST, EMPTY).
+            shape (Tuple[int, ...]): The shape of the tensor to be created.
+            dtype (DType): The data type of the tensor.
+            arg (Optional): Additional argument needed for some operations, like the value for CONST.
+
+        Returns:
+            TensorData: The resulting TensorData object.
+
+        Raises:
+            NotImplementedError: If the operation is not supported.
         """
         if op == LoadOps.RAND:
             return TensorData(np.random.default_rng(arg).random(size=shape, dtype=dtype.np))
@@ -41,21 +56,17 @@ class TensorData:
         elif op == LoadOps.EMPTY:
             return TensorData(np.empty(shape, dtype=dtype.np))
         else:
-            raise NotImplementedError(op)
+            raise NotImplementedError(f"Operation {op} not implemented")
 
-    def const(self, x) -> TensorData:
-        """Returns a new LazyBuffer with a constant value."""
-        return TensorData(np.full_like(self.data, x))
-
-    def cast(self, dtype: DType, bitcast: bool = False) -> TensorData:
-        """Casts the buffer to a different data type."""
+    def cast(self, dtype: DType, bitcast: bool = False) -> 'TensorData':
+        """Cast the TensorData to a different data type."""
         if bitcast:
             return TensorData(self.data.view(dtype.np))
         else:
             return TensorData(self.data.astype(dtype.np))
 
-    def exec(self, op, *srcs: TensorData):
-        """Execute a unary, binary, or ternary operation on the buffer."""
+    def exec(self, op, *srcs: 'TensorData'):
+        """Execute a unary, binary, or ternary operation on the data."""
         unary_ops = {
             UnaryOps.NEG: np.negative,
             UnaryOps.EXP2: np.exp2,
@@ -85,10 +96,7 @@ class TensorData:
             raise NotImplementedError(f"Operation {op} not implemented or wrong number of sources")
 
     def reduce(self, op, new_shape):
-        """
-        Perform reduction operations on the buffer.
-        Supported operations: ReduceOps.
-        """
+        """Perform reduction operations on the  data."""
         if DEBUG >= 1: 
             print(op, self, new_shape)
         assert len(self.shape) == len(new_shape), "reduce shapes must have same dimensions"
@@ -104,25 +112,33 @@ class TensorData:
 
     # Movement operations
     def reshape(self, arg):
-        """Reshape the buffer to a new shape."""
+        """Reshape the  data to a new shape."""
         return TensorData(self.data.reshape(arg))
 
     def expand(self, arg):
-        """Expand the buffer to a new shape by broadcasting."""
+        """Expand the data to a new shape by broadcasting."""
         return TensorData(np.broadcast_to(self.data, arg))
 
     def shrink(self, arg):
-        """Shrink the buffer by slicing it."""
+        """Shrink the data by slicing it."""
         return TensorData(self.data[tuple(slice(p[0], p[1], None) for p in arg)])
 
     def permute(self, arg):
-        """Permute the axes of the buffer."""
+        """Permute the axes of the  data."""
         return TensorData(self.data.transpose(arg))
 
     def pad(self, arg):
-        """Pad the buffer with specified padding."""
+        """Pad the  data with specified padding."""
         return TensorData(np.pad(self.data, arg))
 
     def stride(self, arg):
-        """Apply striding to the buffer."""
+        """Apply striding to the  data."""
         return TensorData(self.data[tuple(slice(None, None, i) for i in arg)])
+    
+    def is_unrealized_contiguous_const(self):
+        """Checks if the buffer is an unrealized contiguous constant."""
+        return False
+    
+    def const(self, x) -> 'TensorData':
+        """Returns a new LazyBuffer with a constant value."""
+        return TensorData(np.full_like(self.data, x))

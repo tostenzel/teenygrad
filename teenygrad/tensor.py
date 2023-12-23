@@ -69,8 +69,6 @@ class Tensor:
 
   # ***** data handlers ****
 
-
-
   def assign(self, x) -> Tensor:
     # TODO: this is a hack for writing to DISK
     if x.__class__ is not Tensor: x = Tensor(x, dtype=self.dtype)

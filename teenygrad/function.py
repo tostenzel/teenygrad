@@ -1,3 +1,9 @@
+"""Containts the core differentiable functions with forward and backward passes.
+
+Many other functions in the Tensor class are composed of these functions and can therefore be
+backpropagated, too.
+
+"""
 import math
 from typing import Tuple, Optional, cast
 from teenygrad.helpers import argsort, DType
@@ -5,8 +11,8 @@ from teenygrad.ops import UnaryOps, BinaryOps, TernaryOps, ReduceOps
 from teenygrad.data import TensorData
 from teenygrad.shape.symbolic import shape_int
 
-
 from typing import Type
+
 
 class Function:
     """Base class for all differentiable operations.
@@ -46,7 +52,6 @@ class Function:
         """
         raise RuntimeError(f"backward not implemented for {type(self)}")
 
-
     @classmethod
     def apply(fxn:Type['Function'], *x:'Tensor', **kwargs) -> 'Tensor':
         """Apply the function to the given tensors and return the result.
@@ -68,7 +73,7 @@ class Function:
         if ctx.requires_grad and not Tensor.no_grad:
             ret._ctx = ctx  # Context is stored for use by the autograd engine
         return ret
-    
+
   
 class Cast(Function):
     """Handles casting of TensorData to a different data type."""

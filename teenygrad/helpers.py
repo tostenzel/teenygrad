@@ -1,7 +1,6 @@
 from typing import Union, Tuple, Iterator, Optional, Final, Any
 import os
 import functools
-import platform
 import numpy as np
 from math import prod  # noqa: F401 # pylint:disable=unused-import
 from dataclasses import dataclass
