@@ -13,4 +13,4 @@ class TernaryOps(Enum):
 class MovementOps(Enum): 
     RESHAPE = auto(); PERMUTE = auto(); EXPAND = auto(); PAD = auto(); SHRINK = auto(); STRIDE = auto()
 class LoadOps(Enum): 
-    EMPTY = auto(); RAND = auto(); CONST = auto(); FROM = auto(); CONTIGUOUS = auto(); CUSTOM = auto()
+    EMPTY = auto(); RAND = auto(); CONST = auto(); FROM = auto(); CUSTOM = auto()

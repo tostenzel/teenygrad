@@ -6,8 +6,6 @@ import numpy as np
 from math import prod  # noqa: F401 # pylint:disable=unused-import
 from dataclasses import dataclass
 
-# Check if the operating system is OSX (Darwin)
-OSX = platform.system() == "Darwin"
 
 def dedup(x):
     """Remove duplicates from a list while retaining the order."""
@@ -105,6 +103,3 @@ class dtypes:
 
 # Dictionary mapping data type names to DType objects
 DTYPES_DICT = {k: v for k, v in dtypes.__dict__.items() if not k.startswith('__') and not callable(v) and not v.__class__ == staticmethod}
-
-# Placeholder variables (to be removed or defined elsewhere)
-PtrDType, ImageDType, IMAGE = None, None, 0

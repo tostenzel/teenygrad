@@ -14,19 +14,19 @@ class Optimizer:
         assert len(self.params) != 0, "optimizer must have at least one param"
         # Buffers: Tensors without gradient requirement
         self.buffers = dedup([x for x in params if not x.requires_grad])
-        self.learning_rate = Tensor([lr], requires_grad=False).contiguous()
+        self.learning_rate = Tensor([lr], requires_grad=False)
 
     def zero_grad(self):
         """Resets the gradient of all parameters to None."""
         for param in self.params:
             param.grad = None
 
-    def realize(self, extra=None):
-        """Realizes the computation for the optimizer's parameters and any additional tensors."""
-        tensors_to_realize = self.params + self.buffers
-        if extra is not None:
-            tensors_to_realize += extra
-        Tensor.corealize(tensors_to_realize)
+    # def realize(self, extra=None):
+    #     """Realizes the computation for the optimizer's parameters and any additional tensors."""
+    #     tensors_to_realize = self.params + self.buffers
+    #     if extra is not None:
+    #         tensors_to_realize += extra
+    #     Tensor.corealize(tensors_to_realize)
 
 class SGD(Optimizer):
     """Stochastic Gradient Descent (SGD) optimizer with optional momentum and weight decay."""
@@ -41,13 +41,11 @@ class SGD(Optimizer):
         """Performs a single optimization step (parameter update)."""
         for i, t in enumerate(self.params):
             assert t.grad is not None
-            grad = t.grad.realize() + self.weight_decay * t.detach()
+            grad = t.grad + self.weight_decay * t.detach()
             if self.momentum:
-                self.buffer[i].assign(self.momentum * self.buffer[i] + grad).realize()
+                self.buffer[i].assign(self.momentum * self.buffer[i] + grad)
                 grad = (grad + self.momentum * self.buffer[i]) if self.nesterov else self.buffer[i]
             t.assign(t.detach() - grad * self.learning_rate)
-        self.realize(self.buffer)
-
 
 def AdamW(params: List[Tensor], lr=0.001, b1=0.9, b2=0.999, eps=1e-8, wd=0.01):
     """Variant of the Adam optimizer that includes weight decay."""
@@ -73,7 +71,7 @@ class LAMB(Optimizer):
         self.epsilon = eps
         self.weight_decay = wd
         self.is_adam = adam
-        self.time_step = Tensor([0], requires_grad=False).realize()
+        self.time_step = Tensor([0], requires_grad=False)
         self.moments = [Tensor.zeros(*t.shape, requires_grad=False) for t in self.params]
         self.velocities = [Tensor.zeros(*t.shape, requires_grad=False) for t in self.params]
 
@@ -81,12 +79,12 @@ class LAMB(Optimizer):
         """
         Performs a single optimization step (parameter update).
         """
-        self.time_step.assign(self.time_step + 1).realize()
+        self.time_step.assign(self.time_step + 1)
         for i, t in enumerate(self.params):
             assert t.grad is not None
-            grad = t.grad.realize()
-            self.moments[i].assign(self.beta1 * self.moments[i] + (1.0 - self.beta1) * grad).realize()
-            self.velocities[i].assign(self.beta2 * self.velocities[i] + (1.0 - self.beta2) * (grad * grad)).realize()
+            grad = t.grad
+            self.moments[i].assign(self.beta1 * self.moments[i] + (1.0 - self.beta1) * grad)
+            self.velocities[i].assign(self.beta2 * self.velocities[i] + (1.0 - self.beta2) * (grad * grad))
             m_hat = self.moments[i] / (1.0 - self.beta1 ** self.time_step)
             v_hat = self.velocities[i] / (1.0 - self.beta2 ** self.time_step)
             update = (m_hat / (v_hat.sqrt() + self.epsilon)) + self.weight_decay * t.detach()
@@ -97,4 +95,3 @@ class LAMB(Optimizer):
             else:
                 trust_ratio = 1.0
             t.assign(t.detach() - self.learning_rate * trust_ratio * update)
-        self.realize([self.time_step] + self.moments + self.velocities)
