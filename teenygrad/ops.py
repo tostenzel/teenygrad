@@ -14,12 +14,3 @@ class MovementOps(Enum):
     RESHAPE = auto(); PERMUTE = auto(); EXPAND = auto(); PAD = auto(); SHRINK = auto(); STRIDE = auto()
 class LoadOps(Enum): 
     EMPTY = auto(); RAND = auto(); CONST = auto(); FROM = auto(); CONTIGUOUS = auto(); CUSTOM = auto()
-
-# Device handling class
-class Device:
-    DEFAULT = "CPU"
-    _buffers = ["CPU"]
-
-    @staticmethod
-    def canonicalize(device: Optional[str]) -> str:
-        return "CPU"

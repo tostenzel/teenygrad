@@ -12,10 +12,9 @@ class Optimizer:
 
         self.params = dedup([x for x in params if x.requires_grad])
         assert len(self.params) != 0, "optimizer must have at least one param"
-        self.device = self.params[0].device
         # Buffers: Tensors without gradient requirement
         self.buffers = dedup([x for x in params if not x.requires_grad])
-        self.learning_rate = Tensor([lr], requires_grad=False, device=self.device).contiguous()
+        self.learning_rate = Tensor([lr], requires_grad=False).contiguous()
 
     def zero_grad(self):
         """Resets the gradient of all parameters to None."""
@@ -36,7 +35,7 @@ class SGD(Optimizer):
         self.momentum = momentum
         self.weight_decay = weight_decay
         self.nesterov = nesterov
-        self.buffer = [Tensor.zeros(*t.shape, device=t.device, requires_grad=False) for t in self.params] if self.momentum else []
+        self.buffer = [Tensor.zeros(*t.shape, requires_grad=False) for t in self.params] if self.momentum else []
 
     def step(self):
         """Performs a single optimization step (parameter update)."""
@@ -75,8 +74,8 @@ class LAMB(Optimizer):
         self.weight_decay = wd
         self.is_adam = adam
         self.time_step = Tensor([0], requires_grad=False).realize()
-        self.moments = [Tensor.zeros(*t.shape, device=t.device, requires_grad=False) for t in self.params]
-        self.velocities = [Tensor.zeros(*t.shape, device=t.device, requires_grad=False) for t in self.params]
+        self.moments = [Tensor.zeros(*t.shape, requires_grad=False) for t in self.params]
+        self.velocities = [Tensor.zeros(*t.shape, requires_grad=False) for t in self.params]
 
     def step(self):
         """

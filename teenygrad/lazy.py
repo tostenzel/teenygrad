@@ -14,7 +14,6 @@ class RawCPUBuffer:
 
 class LazyBuffer:
     """Class representing a buffer that delays computation until necessary (lazy evaluation)."""
-    device = "CPU"
 
     def __init__(self, buf: np.ndarray):
         """Initialize the LazyBuffer with a numpy array."""
@@ -51,17 +50,13 @@ class LazyBuffer:
         """Checks if the buffer is an unrealized contiguous constant."""
         return False
 
-    def copy_to_device(self, device: str) -> LazyBuffer:
-        """Returns the buffer itself as device copying is not implemented."""
-        return self
-
     @staticmethod
     def fromCPU(x):
         """Creates a LazyBuffer from a numpy array."""
         return LazyBuffer(x)
 
     @staticmethod
-    def loadop(op, shape, dtype, device, arg=None, src=None) -> LazyBuffer:
+    def loadop(op, shape, dtype, arg=None, src=None) -> LazyBuffer:
         """
         Load operation for creating a LazyBuffer based on specified operation. 
         Supported operations: RAND, CONST, EMPTY.
