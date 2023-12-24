@@ -1,14 +1,15 @@
-"""Defines the TensorData class, a container for tensor data (tensor.Tensor.data) represented as numpy arrays.
+"""Defines the TensorData class, a container for tensor data (tensor.Tensor.data), represented as numpy arrays.
 
 It facilitates direct manipulation of tensor data through a range of basic operations. These operations are building
-blocks for defining forward and backward passes of differentiable Functions.
-The ops are executed immediately on the CPU using numpy.  This approach contrasts with deferred computation models that
-are common in industrial-scale libraries.
+blocks for defining forward and backward passes of differentiable Functions in the computational graph.
+The ops are executed immediately on the CPU using numpy. This approach contrasts with deferred computation models that
+analyze subsequent delayed operations in order to find an optimized equivalent final optimization at the point where
+execution is actually required. The deferred model is common in industrial-scale libraries.
 
 """
 from typing import Tuple
 import numpy as np
-from teenygrad.ops import UnaryOps, BinaryOps, TernaryOps, ReduceOps, LoadOps
+from teenygrad.ops import UnaryOps, BinaryOps, TernaryOps, ReduceOps, LoadOps   # consider reading the docs there
 from teenygrad.helpers import DType, dtypes, DEBUG
 
 
@@ -35,8 +36,7 @@ class TensorData:
 
     @staticmethod
     def loadop(op: LoadOps, shape: Tuple[int, ...], dtype: DType, arg=None) -> 'TensorData':
-        """
-        Create a TensorData object based on a specific loading operation.
+        """Create a TensorData object based on a specific loading operation.
 
         Supported operations include creating random data, constant data, or empty data.
 
@@ -115,7 +115,7 @@ class TensorData:
             raise NotImplementedError(op)
 
     # ------------------------------------------------------------------------------------------------------------------
-    # Movement operations
+    # movement operations
     def reshape(self, arg):
         """Reshape the data to a new shape."""
         return TensorData(self.data.reshape(arg))

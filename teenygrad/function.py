@@ -4,6 +4,8 @@ These functions are compositions of basic numpy operations wrapped in data.Tenso
 Many other methods in the tensor.Tensor class are composed of these functions and can therefore be
 backpropagated, too.
 
+All these functions are applied to and return TensorData objects that can be called with Tensor.data.
+
 """
 import math
 from typing import Tuple, Optional, cast
