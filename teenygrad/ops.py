@@ -1,14 +1,19 @@
-"""This module defines various enums representing different types of operations.
+"""This module defines various Enums representing different types of tensor operations implemented in function.py.
 
-These enums are utilized to categorize and manage various operations in the library, 
-allowing for a structured and organized approach to implementing and handling these operations.
+These Enums categorize operations in the library, facilitating a structured approach to implementing and managing tensor
+operations.
+Each enum type corresponds to a specific category of tensor operations, ranging from unary to complex movement
+operations.
 
 """
 from enum import Enum, auto
 
 
 class UnaryOps(Enum):
-    """Unary operations, taking a single operand."""
+    """Enum for unary operations, which are operations taking a single operand (tensor).
+
+    These operations apply a specific mathematical or functional transformation to every element of a tensor.
+    """
     NOOP = auto()
     EXP2 = auto()
     LOG2 = auto()
@@ -18,8 +23,12 @@ class UnaryOps(Enum):
     RECIP = auto()
     NEG = auto()
 
+
 class BinaryOps(Enum):
-    """Binary operations, involving two operands."""
+    """Enum for binary operations, which involve two operands (tensors).
+
+    These operations typically perform element-wise calculations between two tensors.
+    """
     ADD = auto()
     SUB = auto()
     MUL = auto()
@@ -28,18 +37,27 @@ class BinaryOps(Enum):
     MOD = auto()
     CMPLT = auto()
 
+
 class TernaryOps(Enum):
-    """Ternary operations, involving three operands."""
+    """Enum for ternary operations, involving three operands (tensors).
+
+    These are more complex operations that usually combine aspects of multiple binary operations.
+    """
     MULACC = auto()
     WHERE = auto()
 
+
 class ReduceOps(Enum):
-    """Reduction operations, aggregating values across dimensions."""
+    """Enum for reduction operations, which aggregate values across specified dimensions of a tensor.
+
+    These operations can reduce a tensor to fewer dimensions based on the operation.
+    """
     SUM = auto()
     MAX = auto()
 
+
 class MovementOps(Enum):
-    """Operations that modify the structure or shape of data."""
+    """Enum for operations that modify the structure or shape of tensor data without altering the actual data values."""
     RESHAPE = auto()
     PERMUTE = auto()
     EXPAND = auto()
@@ -47,8 +65,12 @@ class MovementOps(Enum):
     SHRINK = auto()
     STRIDE = auto()
 
+
 class LoadOps(Enum):
-    """Operations related to loading or initializing data."""
+    """Enum for operations related to loading or initializing tensor data.
+
+    These operations are typically used for creating tensors from various sources or with specific initialization patterns.
+    """
     EMPTY = auto()
     RAND = auto()
     CONST = auto()

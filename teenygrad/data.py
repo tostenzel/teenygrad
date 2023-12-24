@@ -1,6 +1,9 @@
-"""This module defines the TensorData class, a container for tensor data represented as numpy arrays. It facilitates direct
-manipulation of tensor data through a range of operations executed immediately on the CPU using numpy. This approach
-contrasts with deferred computation models.
+"""Defines the TensorData class, a container for tensor data (tensor.Tensor.data) represented as numpy arrays.
+
+It facilitates direct manipulation of tensor data through a range of basic operations. These operations are building
+blocks for defining forward and backward passes of differentiable Functions.
+The ops are executed immediately on the CPU using numpy.  This approach contrasts with deferred computation models that
+are common in industrial-scale libraries.
 
 """
 from typing import Tuple
@@ -38,6 +41,7 @@ class TensorData:
         Supported operations include creating random data, constant data, or empty data.
 
         Args:
+
             op (LoadOps): The operation type (e.g., RAND, CONST, EMPTY).
             shape (Tuple[int, ...]): The shape of the tensor to be created.
             dtype (DType): The data type of the tensor.
@@ -96,7 +100,7 @@ class TensorData:
             raise NotImplementedError(f"Operation {op} not implemented or wrong number of sources")
 
     def reduce(self, op, new_shape):
-        """Perform reduction operations on the  data."""
+        """Perform reduction operations on the data."""
         if DEBUG >= 1: 
             print(op, self, new_shape)
         assert len(self.shape) == len(new_shape), "reduce shapes must have same dimensions"
@@ -110,9 +114,10 @@ class TensorData:
         else: 
             raise NotImplementedError(op)
 
+    # ------------------------------------------------------------------------------------------------------------------
     # Movement operations
     def reshape(self, arg):
-        """Reshape the  data to a new shape."""
+        """Reshape the data to a new shape."""
         return TensorData(self.data.reshape(arg))
 
     def expand(self, arg):
@@ -124,11 +129,11 @@ class TensorData:
         return TensorData(self.data[tuple(slice(p[0], p[1], None) for p in arg)])
 
     def permute(self, arg):
-        """Permute the axes of the  data."""
+        """Permute the axes of the data."""
         return TensorData(self.data.transpose(arg))
 
     def pad(self, arg):
-        """Pad the  data with specified padding."""
+        """Pad the data with specified padding."""
         return TensorData(np.pad(self.data, arg))
 
     def stride(self, arg):
@@ -136,9 +141,9 @@ class TensorData:
         return TensorData(self.data[tuple(slice(None, None, i) for i in arg)])
     
     def is_unrealized_contiguous_const(self):
-        """Checks if the buffer is an unrealized contiguous constant."""
+        """Checks if the data is an unrealized contiguous constant."""
         return False
     
     def const(self, x) -> 'TensorData':
-        """Returns a new LazyBuffer with a constant value."""
+        """Returns a new TensorData with a constant value."""
         return TensorData(np.full_like(self.data, x))
