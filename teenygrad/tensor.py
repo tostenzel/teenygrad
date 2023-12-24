@@ -7,10 +7,9 @@ from functools import reduce
 from itertools import accumulate
 import numpy as np
 
-from teenygrad.helpers import argfix, make_pair, getenv, DEBUG, flatten, DType, dtypes, prod, all_int, round_up
+from teenygrad.helpers import argfix, make_pair, getenv, DEBUG, flatten, DType, dtypes, prod, all_int, round_up, shape_int
 from teenygrad.data import TensorData
 from teenygrad.ops import LoadOps
-from teenygrad.shape.symbolic import shape_int
 from teenygrad.function import Function
 import teenygrad.function as function
 

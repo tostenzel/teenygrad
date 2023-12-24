@@ -5,6 +5,7 @@ import numpy as np
 from math import prod  # noqa: F401 # pylint:disable=unused-import
 from dataclasses import dataclass
 
+shape_int = int
 
 def dedup(x):
     """Remove duplicates from a list while retaining the order."""

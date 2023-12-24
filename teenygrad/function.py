@@ -7,10 +7,9 @@ backpropagated, too.
 """
 import math
 from typing import Tuple, Optional, cast
-from teenygrad.helpers import argsort, DType
+from teenygrad.helpers import argsort, DType, shape_int
 from teenygrad.ops import UnaryOps, BinaryOps, TernaryOps, ReduceOps
 from teenygrad.data import TensorData
-from teenygrad.shape.symbolic import shape_int
 
 from typing import Type
 
@@ -38,7 +37,7 @@ class Function:
         # Determine if gradients are needed for each input tensor
         self.needs_input_grad = [t.requires_grad for t in tensors]
         # If any input requires grad, or if it's unknown (None), set this function to require grad
-        self.requires_grad = any(self.needs_input_grad) or None in self.needs_input_grad
+        self.requires_grad = True if any(self.needs_input_grad) else None if None in self.needs_input_grad else False
         # Store parent tensors for gradient computation in the backward pass if needed
         if self.requires_grad:
             self.parents = tensors
@@ -62,30 +61,28 @@ class Function:
         raise RuntimeError(f"backward not implemented for {type(self)}")
 
     @classmethod
-    def apply(cls: Type['Function'], *x: 'Tensor', **kwargs) -> 'Tensor':
+    def apply(fxn:Type['Function'], *x:'Tensor', **kwargs) -> 'Tensor':
         """Apply the function to the given tensors and return the result.
 
         This method handles the setup of the computational graph by creating a context for the function,
         performing the forward pass, and setting up the backward pass if necessary.
 
         Args:
-            cls (Type[Function]): The function class to be applied.
+            fxn (Type[Function]): The function class to be applied.
             *x (Tensor): Input tensors for the function.
-            **kwargs: Additional keyword arguments for the forward pass.
+            **kwargs: Additional keyword arguments.
 
         Returns:
-            Tensor: The result of applying the function, encapsulated in a Tensor.
-
+            Tensor: The result of applying the function.
         """
         from teenygrad.tensor import Tensor
         # Create a context (an instance of the function) for the computation
-        ctx = cls(*x)
+        ctx = fxn(*x)
         # Compute the forward pass
-        result_data = ctx.forward(*[t.data for t in x], **kwargs)
-        ret = Tensor(result_data, requires_grad=ctx.requires_grad)
+        ret = Tensor(ctx.forward(*[t.data for t in x], **kwargs), requires_grad=ctx.requires_grad)
         # If gradients are required and global gradient computation is not turned off, store the context
         if ctx.requires_grad and not Tensor.no_grad:
-            ret._ctx = ctx  # Context is stored for use during the backward pass by the autograd engine
+            ret._ctx = ctx  # Context is stored for use by the autograd engine
         return ret
 
 
