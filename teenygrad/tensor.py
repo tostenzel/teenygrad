@@ -17,6 +17,7 @@ from teenygrad.tensor_autograd_engine import deepwalk, backward
 from teenygrad.tensor_auxiliary import _assign
 from teenygrad.tensor_auxiliary import _randn, _randint, _normal, _uniform, _scaled_uniform
 from teenygrad.tensor_auxiliary import _multinomial, _gather, _cat, _stack, _repeat, _chunk, _squeeze, _unsqueeze, _pad2d
+from teenygrad.tensor_shapes import _reshape, _expand, _permute, _flip, _shrink, _pad, _slice, _transpose, _flatten
 
 
 class Tensor:
@@ -162,17 +163,12 @@ class Tensor:
 
     # ***** movement mlops *****
 
-    def reshape(self, shape, *args) -> Tensor:
-        new_shape = argfix(shape, *args)
-        return function.Reshape.apply(self, shape=tuple([-prod(self.shape) // prod(new_shape) if s == -1 else (s if s is not None else self.shape[i]) for i,s in enumerate(new_shape)]))
-    def expand(self, shape, *args) -> Tensor: return function.Expand.apply(self, shape=tuple([x if x != -1 else s for s,x in zip(self.shape, argfix(shape, *args))]))
-    def permute(self, order, *args) -> Tensor: return function.Permute.apply(self, order=argfix(order, *args))
-    def flip(self, axis, *args) -> Tensor: return function.Flip.apply(self, axis=[x if x >= 0 else x+len(self.shape) for x in argfix(axis, *args)])
-    def shrink(self, arg:Tuple[Optional[Tuple[shape_int, shape_int]], ...]) -> Tensor: return function.Shrink.apply(self, arg=tuple(x if x is not None else (0,s) for x,s in zip(arg, self.shape))) if any(x is not None and x != (0,s) for x,s in zip(arg, self.shape)) else self
-    def pad(self, arg:Tuple[Optional[Tuple[int, int]], ...], value:float=0.0) -> Tensor:
-        if all(x is None or x == (0,0) for x in arg): return self
-        ret = function.Pad.apply(self, arg=(narg:=tuple(x if x is not None else (0,0) for x in arg)))
-        return ret if 0 == value else ret + function.Pad.apply(Tensor.ones_like(self), arg=narg).where(0, value)
+    def reshape(self, shape, *args) -> Tensor: return _reshape(self, shape, *args)
+    def expand(self, shape, *args) -> Tensor: return _expand(self, shape, *args)
+    def permute(self, order, *args) -> Tensor: return _permute(self, order, *args)
+    def flip(self, axis, *args) -> Tensor: return _flip(self, axis, *args)
+    def shrink(self, arg:Tuple[Optional[Tuple[shape_int, shape_int]], ...]) -> Tensor: return _shrink(self, arg)
+    def pad(self, arg:Tuple[Optional[Tuple[int, int]], ...], value:float=0.0) -> Tensor: _pad(self, arg, value)
 
     # ***** movement hlops *****
 
@@ -271,9 +267,7 @@ class Tensor:
 
     # NOTE: using slice is discouraged and things should migrate to pad and shrink
     def slice(self, arg:Sequence[Optional[Tuple[int, shape_int]]], value:float=0) -> Tensor:
-        arg_ = tuple([a if a is not None else (0,s) for s,a in zip(self.shape, arg)])
-        padding = tuple([(max(0, -p[0]), max(0, p[1]-self.shape[i])) for i,p in enumerate(arg_)])
-        return self.pad(padding, value=value).shrink(tuple([(p[0] + padding[i][0], p[1] + padding[i][0]) for i,p in enumerate(arg_)]))
+        return _slice(self, arg, value)
 
     def gather(self: Tensor, idx: Tensor, dim: int) -> Tensor: return _gather(self, idx, dim)
 
@@ -295,11 +289,8 @@ class Tensor:
 
     @property
     def T(self) -> Tensor: return self.transpose()
-    def transpose(self, ax1=1, ax2=0) -> Tensor:
-        order = list(range(len(self.shape)))
-        order[ax1], order[ax2] = order[ax2], order[ax1]
-        return self.permute(order)
-    def flatten(self, start_dim=0): return self.reshape(shape=self.shape[:start_dim] + (-1,))
+    def transpose(self, ax1=1, ax2=0) -> Tensor: return _transpose(self, ax1, ax2)
+    def flatten(self, start_dim=0): return _flatten(self, start_dim)
 
     # ***** reduce ops *****
 
