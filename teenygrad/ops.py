@@ -1,78 +1,24 @@
-"""This module defines various Enums representing different types of tensor operations implemented in function.py.
+"""This module defines various operation types for tensor operations implemented in function.py, using namedtuples.
 
-These Enums categorize operations in the library, facilitating a structured approach to implementing and managing tensor
-operations.
-Each enum type corresponds to a specific category of tensor operations, ranging from unary to complex movement
-operations.
+These namedtuples categorize operations in the program, facilitating a structured approach to implementing and managing
+tensor operations.
+
+Operation Types:
+- UnaryOps: Operations taking a single operand (tensor). They apply specific mathematical or functional transformations
+    to every element of a tensor.
+- BinaryOps: Involve two operands (tensors), typically performing element-wise calculations.
+- TernaryOps: More complex operations involving three operands (tensors), combining multiple binary operations.
+- ReduceOps: Aggregate values across specified dimensions of a tensor, reducing its dimensions.
+- MovementOps: Modify the structure or shape of tensor data without altering actual data values.
+- LoadOps: Related to loading or initializing tensor data, creating tensors from various sources or with specific
+    initialization patterns.
 
 """
-from enum import Enum, auto
+from collections import namedtuple
 
-
-class UnaryOps(Enum):
-    """Enum for unary operations, which are operations taking a single operand (tensor).
-
-    These operations apply a specific mathematical or functional transformation to every element of a tensor.
-    """
-    NOOP = auto()
-    EXP2 = auto()
-    LOG2 = auto()
-    CAST = auto()
-    SIN = auto()
-    SQRT = auto()
-    RECIP = auto()
-    NEG = auto()
-
-
-class BinaryOps(Enum):
-    """Enum for binary operations, which involve two operands (tensors).
-
-    These operations typically perform element-wise calculations between two tensors.
-    """
-    ADD = auto()
-    SUB = auto()
-    MUL = auto()
-    DIV = auto()
-    MAX = auto()
-    MOD = auto()
-    CMPLT = auto()
-
-
-class TernaryOps(Enum):
-    """Enum for ternary operations, involving three operands (tensors).
-
-    These are more complex operations that usually combine aspects of multiple binary operations.
-    """
-    MULACC = auto()
-    WHERE = auto()
-
-
-class ReduceOps(Enum):
-    """Enum for reduction operations, which aggregate values across specified dimensions of a tensor.
-
-    These operations can reduce a tensor to fewer dimensions based on the operation.
-    """
-    SUM = auto()
-    MAX = auto()
-
-
-class MovementOps(Enum):
-    """Enum for operations that modify the structure or shape of tensor data without altering the actual data values."""
-    RESHAPE = auto()
-    PERMUTE = auto()
-    EXPAND = auto()
-    PAD = auto()
-    SHRINK = auto()
-    STRIDE = auto()
-
-
-class LoadOps(Enum):
-    """Enum for operations related to loading or initializing tensor data.
-
-    These operations are typically used for creating tensors from various sources or with specific initialization patterns.
-    """
-    EMPTY = auto()
-    RAND = auto()
-    CONST = auto()
-    FROM = auto()
-    CUSTOM = auto()
+UnaryOps = namedtuple('UnaryOps', ['NOOP', 'EXP2', 'LOG2', 'CAST', 'SIN', 'SQRT', 'RECIP', 'NEG'])
+BinaryOps = namedtuple('BinaryOps', ['ADD', 'SUB', 'MUL', 'DIV', 'MAX', 'MOD', 'CMPLT'])
+TernaryOps = namedtuple('TernaryOps', ['MULACC', 'WHERE'])
+ReduceOps = namedtuple('ReduceOps', ['SUM', 'MAX'])
+MovementOps = namedtuple('MovementOps', ['RESHAPE', 'PERMUTE', 'EXPAND', 'PAD', 'SHRINK', 'STRIDE'])
+LoadOps = namedtuple('LoadOps', ['EMPTY', 'RAND', 'CONST', 'FROM', 'CUSTOM'])

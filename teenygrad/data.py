@@ -1,7 +1,8 @@
 """Defines the TensorData class, a container for tensor data (tensor.Tensor.data), represented as numpy arrays.
 
 It facilitates direct manipulation of tensor data through a range of basic operations. These operations are building
-blocks for defining forward and backward passes of differentiable Functions in the computational graph.
+blocks for defining forward and backward passes of differentiable function.Functions.
+
 The ops are executed immediately on the CPU using numpy. This approach contrasts with deferred computation models that
 analyze subsequent delayed operations in order to find an optimized equivalent final optimization at the point where
 execution is actually required. The deferred model is common in industrial-scale libraries.
@@ -36,7 +37,7 @@ class TensorData:
 
     @staticmethod
     def loadop(op: LoadOps, shape: Tuple[int, ...], dtype: DType, arg=None) -> 'TensorData':
-        """Create a TensorData object based on a specific loading operation.
+        """Create a TensorData object based on a specific loading operation, shape and datatype.
 
         Supported operations include creating random data, constant data, or empty data.
 
@@ -52,6 +53,7 @@ class TensorData:
 
         Raises:
             NotImplementedError: If the operation is not supported.
+
         """
         if op == LoadOps.RAND:
             return TensorData(np.random.default_rng(arg).random(size=shape, dtype=dtype.np))
@@ -69,8 +71,8 @@ class TensorData:
         else:
             return TensorData(self.data.astype(dtype.np))
 
-    def exec(self, op, *srcs: 'TensorData'):
-        """Execute a unary, binary, or ternary operation on the data."""
+    def elementwise(self, op, *srcs: 'TensorData'):
+        """Perform a unary, binary, or ternary elementwise operation on the data."""
         unary_ops = {
             UnaryOps.NEG: np.negative,
             UnaryOps.EXP2: np.exp2,

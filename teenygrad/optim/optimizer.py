@@ -2,8 +2,8 @@
 
 This module provides a set of optimizer classes for updating the parameters of a neural network model
 in response to the gradients computed during backpropagation.
-"""
 
+"""
 from typing import List
 from teenygrad.helpers import dedup
 from teenygrad.tensor import Tensor
@@ -63,6 +63,7 @@ class SGD(Optimizer):
         weight_decay: Weight decay.
         nesterov: Whether to use Nesterov momentum.
         buffer: Buffer storing the momentum values.
+
     """
     def __init__(self, params: List[Tensor], lr: float=0.001, momentum: int=0, weight_decay: float=0.0, nesterov: bool=False):
         super().__init__(params, lr)
@@ -121,6 +122,7 @@ class LAMB(Optimizer):
         time_step: Counter for the number of steps taken.
         moments: First moment vectors (moving averages of the gradients).
         velocities: Second moment vectors (moving averages of the squared gradients).
+
     """
     def __init__(self, params: List[Tensor], lr: float=0.001, b1: float=0.9, b2: float=0.999, eps: float=1e-6, wd: float=0.0, adam: bool=False):
         super().__init__(params, lr)

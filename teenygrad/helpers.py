@@ -27,6 +27,7 @@ def argsort(x):
     """Return the indices that would sort an array.
     
     https://stackoverflow.com/questions/3382352/equivalent-of-numpy-argsort-in-basic-python
+
     """
     return type(x)(sorted(range(len(x)), key=x.__getitem__))
 
@@ -59,7 +60,11 @@ class DType:
         return f"dtypes.{self.name}"
 
 class dtypes:
-    """Container for different data types and utility methods."""
+    """Container for different data types and utility methods.
+    
+    We need this because some layer operation might use different trade-offs
+    between precision and efficiency. In such cases, we have to translate b/w dtypes.
+    """
     @staticmethod
     def is_int(x: DType) -> bool:
         """Check if a data type is an integer type."""
