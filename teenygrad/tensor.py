@@ -18,6 +18,7 @@ from teenygrad.tensor_auxiliary import _assign
 from teenygrad.tensor_auxiliary import _randn, _randint, _normal, _uniform, _scaled_uniform
 from teenygrad.tensor_auxiliary import _multinomial, _gather, _cat, _stack, _repeat, _chunk, _squeeze, _unsqueeze, _pad2d
 from teenygrad.tensor_shapes import _reshape, _expand, _permute, _flip, _shrink, _pad, _slice, _transpose, _flatten
+from teenygrad.tensor_nn import _pool, avg_pool2d, max_pool2d, conv2d, linear, binary_crossentropy, binary_crossentropy_logits, sparse_categorical_crossentropy
 
 
 class Tensor:
@@ -340,52 +341,16 @@ class Tensor:
     # ***** processing ops *****
 
     def _pool(self, k_:Tuple[shape_int, ...], stride:Union[Tuple[int, ...], int]=1, dilation:Union[Tuple[int, ...], int]=1) -> Tensor:
-        assert len(self.shape) >= len(k_), f"can't pool {self.shape} with {k_}"
-        assert all_int(self.shape) and all_int(k_), f"does not support symbolic {self.shape=}, {k_=}"
-        s_, d_ = make_pair(stride, len(k_)), make_pair(dilation, len(k_))
-        assert len(k_) == len(s_) and len(k_) == len(d_), f"stride/dilation mismatch kernel:{k_} stride:{s_} dilation:{d_}"
-        slc_prefix, prefix, i_ = [(0,x) for x in self.shape[0:-len(k_)]], self.shape[0:-len(k_)], self.shape[-len(k_):]
-        if any(k > s for k,s in zip(k_, s_)) or any(d != 1 for d in d_):
-            o_ = [(i - d * (k-1) - 1)//s + 1 for i,d,k,s in zip(i_, d_, k_, s_)]
-            e_ = [math.ceil(k*(i+d) / i) for k,i,d in zip(k_, i_, d_)]    # expands such that we don't need padding
-            xup = self.reshape(*prefix, *flatten((1,i) for i in i_)).expand(*prefix, *flatten((e,i) for e,i in zip(e_, i_))).reshape(*prefix, *[e*i for e,i in zip(e_, i_)])
-            # slide by dilation
-            xup = xup.slice(slc_prefix + [(0,k*(i+d)) for k,i,d in zip(k_, i_, d_)])
-            xup = xup.reshape(*prefix, *flatten((k,i+d) for k,i,d in zip(k_, i_, d_)))
-            xup = xup.slice(slc_prefix + flatten(((0,k), (0,o*s)) for k,o,s in zip(k_, o_, s_)))
-            # handle stride, and permute to move reduce to the end
-            xup = xup.reshape(*prefix, *flatten((k,o,s) for k,o,s in zip(k_, o_, s_)))
-            xup = xup.slice(slc_prefix + flatten(((0,k), (0,o), (0,1)) for k,o in zip(k_, o_)))
-            xup = xup.reshape(*prefix, *flatten((k,o) for k,o in zip(k_, o_)))
-            return xup.permute(*range(len(prefix)), *[len(prefix)+i*2+1 for i in range(len(k_))], *[len(prefix)+i*2 for i in range(len(k_))])
-        # TODO: once the shapetracker can optimize well, remove this alternative implementation. or not if the CPU implementation doesn't use ShapeTracker
-        o_ = [(i+(s-k))//s for i,s,k in zip(i_, s_, k_)]
-        xup = self.slice(slc_prefix + [(0,o*s) for o,s in zip(o_, s_)])
-        xup = xup.reshape(*prefix, *flatten(((o, s) for o,s in zip(o_, s_))))
-        xup = xup.slice(slc_prefix + flatten(((0,o), (0,k)) for o,k in zip(o_, k_)))
-        return xup.permute(*range(len(prefix)), *[len(prefix)+i*2 for i in range(len(k_))], *[len(prefix)+i*2+1 for i in range(len(k_))])
+      return _pool(self, k_, stride, dilation)
+
 
     # NOTE: these work for more than 2D
-    def avg_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return self._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).mean(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
-    def max_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return self._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).max(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
+    def avg_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return avg_pool2d(self, kernel_size, stride, dilation)
+    def max_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return max_pool2d(self, kernel_size, stride, dilation)
 
     wino = int(getenv("WINO", "0"))
     def conv2d(self, weight:Tensor, bias:Optional[Tensor]=None, groups=1, stride=1, dilation=1, padding=0) -> Tensor:
-        (bs,cin_), (cout,cin), HW = self.shape[:2], weight.shape[:2], weight.shape[2:]
-        assert groups*cin == cin_ and len(self.shape) == len(weight.shape), f"Input Tensor shape {self.shape} does not match the shape of the weights {weight.shape}. ({groups*cin} vs. {cin_})"
-        if isinstance(padding, (tuple,list)): assert len(padding) == 2*len(HW) or len(padding) == len(HW), f"Expected padding of length {2*len(HW)} or {len(HW)}, but got {len(padding)} for tensor of shape {self.shape}"
-        padding_ = [padding]*2*len(HW) if isinstance(padding, int) else (padding if len(padding) == 2*len(HW) else [p for p in padding for _ in range(2)][::-1])
-
-        # conv2d is a pooling op (with padding)
-        x = self.pad2d(padding_)._pool(HW, stride, dilation)     # (bs, groups*cin, oy, ox, H, W)
-        rcout, oyx = cout//groups, x.shape[2:-len(HW)]
-        if not all(x == 3 for x in HW) or stride != 1 or dilation != 1 or not Tensor.wino:
-            # normal conv
-            x = x.reshape(bs, groups, cin, 1, *oyx, *HW).expand(bs, groups, cin, rcout, *oyx, *HW).permute(0,1,3,*[4+i for i in range(len(oyx))],2,*[4+len(oyx)+i for i in range(len(HW))])
-
-            # conv! broadcasted to (bs, groups, rcout, *oyx, cin, *HW)
-            ret = (x * weight.reshape(1, groups, rcout, *[1] * len(oyx), cin, *HW)).sum([-1-i for i in range(1+len(oyx))], keepdim=True).reshape(bs, cout, *oyx)
-            return ret if bias is None else ret.add(bias.reshape(1, -1, *[1] * len(HW)))
+        return conv2d(self, weight, bias, groups, stride, dilation, padding)
 
     def dot(self, w:Tensor) -> Tensor:
         n1, n2 = len(self.shape), len(w.shape)
@@ -524,22 +489,13 @@ class Tensor:
 
     # ***** functional nn ops *****
 
-    def linear(self, weight:Tensor, bias:Optional[Tensor]=None):
-        x = self.mul(weight) if len(weight.shape) == 1 else self.dot(weight)
-        return x.add(bias) if bias is not None else x
+    def linear(self, weight:Tensor, bias:Optional[Tensor]=None): return linear(self, weight, bias)
 
-    def binary_crossentropy(self, y:Tensor) -> Tensor:
-        return (-y*self.log() - (1-y)*(1-self).log()).mean()
+    def binary_crossentropy(self, y:Tensor) -> Tensor: return binary_crossentropy(self, y)
 
-    def binary_crossentropy_logits(self, y:Tensor) -> Tensor:
-        return (self.maximum(0) - y * self + (1 + self.abs().__neg__().exp()).log()).mean()
+    def binary_crossentropy_logits(self, y:Tensor) -> Tensor: return binary_crossentropy_logits(self, y)
 
-    def sparse_categorical_crossentropy(self, Y, ignore_index=-1) -> Tensor:
-        # NOTE: self is a logits input
-        loss_mask = Y != ignore_index
-        y_counter = Tensor.arange(self.shape[-1], dtype=dtypes.int32, requires_grad=False).unsqueeze(0).expand(Y.numel(), self.shape[-1])
-        y = ((y_counter == Y.flatten().reshape(-1, 1)).where(-1.0, 0) * loss_mask.reshape(-1, 1)).reshape(*Y.shape, self.shape[-1])
-        return self.log_softmax().mul(y).sum() / loss_mask.sum()
+    def sparse_categorical_crossentropy(self, Y, ignore_index=-1) -> Tensor: return sparse_categorical_crossentropy(self, Y, ignore_index)
 
     # ***** cast ops *****
 
