@@ -7,9 +7,7 @@ from itertools import accumulate
 from teenygrad.helpers import getenv, DEBUG, DType, dtypes, prod, all_int
 
 
-
-
-def _assign(tensor, x) -> 'Tensor':
+def assign(tensor, x) -> 'Tensor':
     from teenygrad.tensor import Tensor
     # TODO: this is a hack for writing to DISK
     if x.__class__ is not Tensor: x = Tensor(x, dtype=tensor.dtype)
@@ -22,37 +20,37 @@ def _assign(tensor, x) -> 'Tensor':
 
 
 # random number generation
-def _randn(*shape, dtype:Optional[DType], **kwargs) -> 'Tensor':
+def randn(*shape, dtype:Optional[DType], **kwargs) -> 'Tensor':
     from teenygrad.tensor import Tensor
     # https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
     src = Tensor.rand(2, *shape, **kwargs)
     return src[0].mul(2*math.pi).cos().mul((1 - src[1]).log().mul(-2).sqrt()).cast(Tensor.default_type if dtype is None else dtype)
 
 
-def _randint(*shape, low, high, **kwargs) -> 'Tensor':
+def randint(*shape, low, high, **kwargs) -> 'Tensor':
     from teenygrad.tensor import Tensor
     return (Tensor.rand(*shape, **kwargs)*(high-low)+low).cast(dtypes.int32)
 
 
-def _normal(*shape, mean, std, **kwargs) -> 'Tensor':
+def normal(*shape, mean, std, **kwargs) -> 'Tensor':
     from teenygrad.tensor import Tensor
     return (std * Tensor.randn(*shape, **kwargs)) + mean
 
 
-def _uniform(*shape, low, high, **kwargs) -> 'Tensor':
+def uniform(*shape, low, high, **kwargs) -> 'Tensor':
     from teenygrad.tensor import Tensor
     dtype = kwargs.pop("dtype", Tensor.default_type)
     return ((high-low) * Tensor.rand(*shape, **kwargs)).cast(dtype) + low
 
 
-def _scaled_uniform(*shape, **kwargs) -> 'Tensor':
+def scaled_uniform(*shape, **kwargs) -> 'Tensor':
     from teenygrad.tensor import Tensor
     return Tensor.uniform(*shape, low=-1.0, high=1.0, **kwargs).mul(prod(shape)**-0.5)
 
 
 # advanced tensor ops
 
-def _multinomial(tensor:'Tensor', num_samples:int = 1, replacement:bool = False) -> 'Tensor':
+def multinomial(tensor:'Tensor', num_samples:int = 1, replacement:bool = False) -> 'Tensor':
     from teenygrad.tensor import Tensor
     assert 1 <= tensor.ndim <= 2 and num_samples > 0, f"{tensor.ndim=} must be 1 or 2 dim, {num_samples=} must be positive"
     assert replacement or num_samples == 1, "no replacement only supports num_samples = 1"
@@ -63,7 +61,7 @@ def _multinomial(tensor:'Tensor', num_samples:int = 1, replacement:bool = False)
     return (indices.squeeze(0) if tensor.ndim == 1 else indices).cast(dtypes.int32)
 
 
-def _gather(tensor: 'Tensor', idx: 'Tensor', dim: int) -> 'Tensor':
+def gather(tensor: 'Tensor', idx: 'Tensor', dim: int) -> 'Tensor':
     from teenygrad.tensor import Tensor
     assert idx.ndim == tensor.ndim, "tensor.ndim must equal idx.ndim"
     assert all(s >= i for s,i in zip(tensor.shape, idx.shape)), "all dim of idx.shape must be smaller than tensor.shape"
@@ -74,7 +72,7 @@ def _gather(tensor: 'Tensor', idx: 'Tensor', dim: int) -> 'Tensor':
     return ((idx == Tensor.arange(tensor.shape[dim], dtype=dtypes.int32, requires_grad=False)) * tensor.permute(*permarg).shrink(tuple([*[(0,sh) for sh in idx.shape[1:-1]], (0,tensor.shape[dim])])).unsqueeze(0)).sum(-1).transpose(ax1=0, ax2=dim)
 
 
-def _cat(tensor, *args, dim) -> 'Tensor':
+def cat(tensor, *args, dim) -> 'Tensor':
     from teenygrad.tensor import Tensor
     dim = (dim + len(tensor.shape)) if dim < 0 else dim
     assert all(len(y.shape) == len(tensor.shape) and all(y.shape[i] == s for i,s in enumerate(tensor.shape) if i != dim) for y in args)
@@ -88,14 +86,14 @@ def _cat(tensor, *args, dim) -> 'Tensor':
 
 
 @staticmethod
-def _stack(tensors, dim) -> 'Tensor':
+def stack(tensors, dim) -> 'Tensor':
     first = tensors[0].unsqueeze(dim)
     unsqueezed_tensors = [tensor.unsqueeze(dim) for tensor in tensors[1:]]
     # checks for shapes and number of Falsedimensions delegated to cat
     return first.cat(*unsqueezed_tensors, dim=dim)
 
 
-def _repeat(tensor: 'Tensor', repeats) -> 'Tensor':
+def repeat(tensor: 'Tensor', repeats) -> 'Tensor':
     base_shape = (1,) * (len(repeats) - tensor.ndim) + tensor.shape
     new_shape = [x for b in base_shape for x in [1, b]]
     expand_shape = [x for rs in zip(repeats, base_shape) for x in rs]
@@ -103,14 +101,14 @@ def _repeat(tensor: 'Tensor', repeats) -> 'Tensor':
     return tensor.reshape(new_shape).expand(expand_shape).reshape(final_shape)
 
 
-def _chunk(tensor: 'Tensor', num:int, dim:int) -> List['Tensor']:
+def chunk(tensor: 'Tensor', num:int, dim:int) -> List['Tensor']:
     assert all_int(tensor.shape), f"does not support symbolic shape {tensor.shape}"
     dim, step = dim + tensor.ndim if dim < 0 else dim, math.ceil(tensor.shape[dim]/num)
     slice_params = [[slice(None)]*dim + [slice(k, k + step)] for k in range(0, tensor.shape[dim], step)]
     return [tensor[tuple(sl)] for sl in slice_params]
 
 
-def _squeeze(tensor: 'Tensor', dim) -> 'Tensor':
+def squeeze(tensor: 'Tensor', dim) -> 'Tensor':
     if dim is None: return tensor if 1 not in tensor.shape else tensor.reshape(*[size for size in tensor.shape if size != 1])
     if dim <= 0 and tensor.ndim == 0: return tensor # This is to match PyTorch behavior
     if not -tensor.ndim <= dim < tensor.ndim: raise IndexError(f"Dimension out of range (expected to be in range of [{-tensor.ndim if tensor.ndim > 0 else tensor.ndim-1}, {tensor.ndim-1 if tensor.ndim > 0 else tensor.ndim}], but got {dim})")
@@ -118,12 +116,9 @@ def _squeeze(tensor: 'Tensor', dim) -> 'Tensor':
     return tensor if tensor.shape[dim] != 1 else tensor.reshape(*[size for idx, size in enumerate(tensor.shape) if idx != dim])
 
 
-def _unsqueeze(tensor: 'Tensor', dim) -> 'Tensor':
+def unsqueeze(tensor: 'Tensor', dim) -> 'Tensor':
     if dim < 0: dim = len(tensor.shape) + dim + 1
     return tensor.reshape(tensor.shape[:dim] + (1,) + tensor.shape[dim:])
 
 
-# (padding_left, padding_right, padding_top, padding_bottom)
-def _pad2d(tensor: 'Tensor', padding:Union[List[int], Tuple[int, ...]], value:float) -> 'Tensor':
-    slc = [(-p0, s+p1) for p0,p1,s in zip(padding[::2], padding[1::2], tensor.shape[::-1])][::-1]
-    return tensor.slice([(0,s) for s in tensor.shape[:-(len(padding)//2)]] + slc, value=value)
+

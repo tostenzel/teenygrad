@@ -13,11 +13,11 @@ from teenygrad.ops import LoadOps
 from teenygrad.function import Function
 import teenygrad.function as function
 
-from teenygrad.tensor_autograd_engine import deepwalk, backward
-from teenygrad.tensor_auxiliary import _assign
-from teenygrad.tensor_auxiliary import _randn, _randint, _normal, _uniform, _scaled_uniform
-from teenygrad.tensor_auxiliary import _multinomial, _gather, _cat, _stack, _repeat, _chunk, _squeeze, _unsqueeze, _pad2d
-from teenygrad.tensor_shapes import _reshape, _expand, _permute, _flip, _shrink, _pad, _slice, _transpose, _flatten
+from teenygrad.tensor_autograd_engine import backward
+from teenygrad.tensor_auxiliary import assign
+from teenygrad.tensor_auxiliary import randn, randint, normal, uniform, scaled_uniform
+from teenygrad.tensor_auxiliary import multinomial, gather, cat, stack, repeat, chunk, squeeze, unsqueeze
+from teenygrad.tensor_shapes import reshape, expand, permute, flip, shrink, pad, pad2d, slice, transpose, flatten
 from teenygrad.tensor_nn import _pool, avg_pool2d, max_pool2d, conv2d, linear, binary_crossentropy, binary_crossentropy_logits, sparse_categorical_crossentropy
 
 
@@ -63,11 +63,13 @@ class Tensor:
         if not isinstance(data, TensorData): raise RuntimeError(f"can't create Tensor from {data!r} with type {type(data)}")
         self.data = data
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # basic properties
 
     def __repr__(self):
         return f"<Tensor {self.data!r} with grad {(self.grad.data if self.grad else None)!r}>"
 
-    # Python has a non moving GC, so this should be okay
+    # Python has a non moving garbage collector, so this should be okay
     def __hash__(self): return id(self)
 
     @property
@@ -78,16 +80,20 @@ class Tensor:
 
     # ***** data handlers ****
 
-    def assign(self, x) -> Tensor: return _assign(self, x)
+    def assign(self, x) -> Tensor: return assign(self, x)
+
+    #-------------------------------------------------------------------------------------------------------------------
+    # basic tensor manipulations 
 
     def detach(self) -> Tensor: return Tensor(self.data, requires_grad=False)
+
     def numpy(self) -> np.ndarray:
         assert all_int(self.shape), f"no numpy if shape is symbolic, {self.shape=}"
         assert self.dtype.np is not None, f"no numpy dtype for {self.dtype}"
         return self.detach().cast(dtypes.from_np(self.dtype.np)).data.data.reshape(self.shape)
     def item(self) -> Union[float, int]: return self.numpy().item()
 
-    # ***** creation llop entrypoint *****
+    # ***** creation low-level op entrypoint *****
 
     @staticmethod
     def _loadop(op, sz, dtype:Optional[DType]=None, arg=None, **kwargs):
@@ -130,48 +136,46 @@ class Tensor:
     def zeros_like(self, **kwargs): return self.full_like(0, **kwargs)
     def ones_like(self, **kwargs): return self.full_like(1, **kwargs)
 
-    # ***** rng hlops *****
+    # ***** random number generation high level ops *****
 
     @staticmethod
-    def randn(*shape, dtype:Optional[DType]=None, **kwargs) -> Tensor: return _randn(*shape, dtype=dtype, **kwargs)
+    def randn(*shape, dtype:Optional[DType]=None, **kwargs) -> Tensor: return randn(*shape, dtype=dtype, **kwargs)
         # https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
         #src = Tensor.rand(2, *shape, **kwargs)
         #return src[0].mul(2*math.pi).cos().mul((1 - src[1]).log().mul(-2).sqrt()).cast(Tensor.default_type if dtype is None else dtype)
 
     @staticmethod
-    def randint(*shape, low=0, high=10, **kwargs) -> Tensor: return _randint(*shape, low=low, high=high, **kwargs) 
+    def randint(*shape, low=0, high=10, **kwargs) -> Tensor: return randint(*shape, low=low, high=high, **kwargs) 
 
     @staticmethod
-    def normal(*shape, mean=0.0, std=1.0, **kwargs) -> Tensor:  return _normal(*shape, mean=mean, std=std, **kwargs) 
+    def normal(*shape, mean=0.0, std=1.0, **kwargs) -> Tensor:  return normal(*shape, mean=mean, std=std, **kwargs) 
 
     @staticmethod
     def uniform(*shape, low=0.0, high=1.0, **kwargs) -> Tensor:
-        return _uniform(*shape, low=low, high=high, **kwargs)
+        return uniform(*shape, low=low, high=high, **kwargs)
 
     @staticmethod
-    def scaled_uniform(*shape, **kwargs) -> Tensor: return _scaled_uniform(*shape, **kwargs)
+    def scaled_uniform(*shape, **kwargs) -> Tensor: return scaled_uniform(*shape, **kwargs)
 
     def multinomial(self:Tensor, num_samples:int = 1, replacement:bool = False) -> Tensor:
-        return _multinomial(self, num_samples, replacement)
+        return multinomial(self, num_samples, replacement)
 
     # ***** toposort and backward pass *****
 
-    def deepwalk(self):
-        return deepwalk(self)
 
     def backward(self):
         return backward(self)
 
     # ***** movement mlops *****
 
-    def reshape(self, shape, *args) -> Tensor: return _reshape(self, shape, *args)
-    def expand(self, shape, *args) -> Tensor: return _expand(self, shape, *args)
-    def permute(self, order, *args) -> Tensor: return _permute(self, order, *args)
-    def flip(self, axis, *args) -> Tensor: return _flip(self, axis, *args)
-    def shrink(self, arg:Tuple[Optional[Tuple[shape_int, shape_int]], ...]) -> Tensor: return _shrink(self, arg)
-    def pad(self, arg:Tuple[Optional[Tuple[int, int]], ...], value:float=0.0) -> Tensor: _pad(self, arg, value)
+    def reshape(self, shape, *args) -> Tensor: return reshape(self, shape, *args)
+    def expand(self, shape, *args) -> Tensor: return expand(self, shape, *args)
+    def permute(self, order, *args) -> Tensor: return permute(self, order, *args)
+    def flip(self, axis, *args) -> Tensor: return flip(self, axis, *args)
+    def shrink(self, arg:Tuple[Optional[Tuple[shape_int, shape_int]], ...]) -> Tensor: return shrink(self, arg)
+    def pad(self, arg:Tuple[Optional[Tuple[int, int]], ...], value:float=0.0) -> Tensor: pad(self, arg, value)
 
-    # ***** movement hlops *****
+    # ***** movement high level ops *****
 
     # - Negative indices are taken relative to the end of the sequence, so X[-2] returns the 2nd-to-last element
     # - A slice i:j returns the elements with indices in [i, j)
@@ -268,30 +272,30 @@ class Tensor:
 
     # NOTE: using slice is discouraged and things should migrate to pad and shrink
     def slice(self, arg:Sequence[Optional[Tuple[int, shape_int]]], value:float=0) -> Tensor:
-        return _slice(self, arg, value)
+        return slice(self, arg, value)
 
-    def gather(self: Tensor, idx: Tensor, dim: int) -> Tensor: return _gather(self, idx, dim)
+    def gather(self: Tensor, idx: Tensor, dim: int) -> Tensor: return gather(self, idx, dim)
 
-    def cat(self, *args, dim=0) -> Tensor: return _cat(self, *args, dim)
+    def cat(self, *args, dim=0) -> Tensor: return cat(self, *args, dim)
 
     @staticmethod
-    def stack(tensors, dim=0) -> Tensor: _stack(tensors, dim)
+    def stack(tensors, dim=0) -> Tensor: stack(tensors, dim)
 
-    def repeat(self, repeats) -> Tensor: _repeat(self, repeats)
+    def repeat(self, repeats) -> Tensor: repeat(self, repeats)
 
-    def chunk(self, num:int, dim:int=0) -> List[Tensor]: _chunk(self, num, dim)
+    def chunk(self, num:int, dim:int=0) -> List[Tensor]: chunk(self, num, dim)
 
-    def squeeze(self, dim=None) -> Tensor: _squeeze(self, dim)
+    def squeeze(self, dim=None) -> Tensor: squeeze(self, dim)
 
-    def unsqueeze(self, dim) -> Tensor: return _unsqueeze(self, dim)
+    def unsqueeze(self, dim) -> Tensor: return unsqueeze(self, dim)
 
     # (padding_left, padding_right, padding_top, padding_bottom)
-    def pad2d(self, padding:Union[List[int], Tuple[int, ...]], value:float=0) -> Tensor: return _pad2d(self, padding, value)
+    def pad2d(self, padding:Union[List[int], Tuple[int, ...]], value:float=0) -> Tensor: return pad2d(self, padding, value)
 
     @property
     def T(self) -> Tensor: return self.transpose()
-    def transpose(self, ax1=1, ax2=0) -> Tensor: return _transpose(self, ax1, ax2)
-    def flatten(self, start_dim=0): return _flatten(self, start_dim)
+    def transpose(self, ax1=1, ax2=0) -> Tensor: return transpose(self, ax1, ax2)
+    def flatten(self, start_dim=0): return flatten(self, start_dim)
 
     # ***** reduce ops *****
 

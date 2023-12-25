@@ -6,7 +6,7 @@ These functions are part of the autograd mechanism, enabling gradient calculatio
 """
 from __future__ import annotations
 
-
+# topological sorting
 def deepwalk(tensor: 'Tensor'):
     """Traverse the computational graph of a tensor in a depth-first manner.
     
