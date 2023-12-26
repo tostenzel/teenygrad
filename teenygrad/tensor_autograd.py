@@ -1,9 +1,4 @@
-"""This module contains functions for automatic differentiation in a neural network library (reverse accumulation).
-
-It includes '_collect_backward_graph' for graph traversal and 'backward' for backpropagation applied to the loss (last node in forward pass). 
-These functions are part of the autograd mechanism, enabling gradient calculations for tensors.
-
-Convention: parents in Tensor._ctx.parents are the previous Tensors (in input direction) from a forward pass perspective.
+"""This module contains functions for automatically computing the gradients from the cost/loss w.r.t. the model params.
 
 Conceptual explanation: https://www.tobiasstenzel.com/blog/2023/dl-backprop/
 
@@ -13,9 +8,8 @@ from __future__ import annotations
 from typing import List, Set
 
 
-# topological sorting
 def _collect_backward_graph(tensor: 'Tensor'):
-    """Collects tensors involved in the computational graph of the given tensor.
+    """Collects tensors involved in the computational graph of the given tensor in backward pass order.
 
     This function performs a depth-first search to traverse the graph from the provided tensor to its origins.
     It's crucial for backpropagation as it orders tensors in the sequence they were involved in computations.
@@ -23,13 +17,15 @@ def _collect_backward_graph(tensor: 'Tensor'):
     Example:
     Consider a computational graph for the function C(θ1, θ2) = θ1 * θ2 + tanh(θ1), with θ1 and θ2 as leaf nodes (inputs).
     This graph includes intermediate nodes z1 to z6. If this function is called on z6 (C(θ1, θ2)), it collects all tensors
-    involved in the computation in the following order: [θ1, θ2, z1, z2, z3, z4, z5, z6]. This order represents the sequence
-    in which these tensors were computed during the forward pass.
-
-    The collected order is reversed during the backward pass for efficient gradient computation. In backpropagation, gradients 
-    are calculated starting from the output (z6) and propagated backward through intermediate nodes to the inputs (θ1, θ2). 
-    Reversing the order ensures that gradients are computed and accumulated from the output back to the inputs, following the 
-    chain rule of calculus.
+    involved in the computation in the following order: [z6, z5, z4, z3, z2, z1, θ2, θ1]. This order represents the reversed
+    sequence in which these tensors were computed during the forward pass.
+    
+    During the forward pass, for every resulting tensor, we first stored an instance of the forward function in tensor._ctx
+    and a Tuple of input tensors from which the operation is derived ._ctx.parents.
+    
+    In backpropagation, gradients are calculated starting from the output (z6), representing the model cost/loss
+    (loss.backward()) and propagated backward through intermediate nodes to the input parameters (θ1, θ2). The gradients
+    are then used by the optimizer to update the parameter values before the next forward pass.
 
     Args:
         tensor: Starting point for graph traversal.
@@ -51,7 +47,7 @@ def _collect_backward_graph(tensor: 'Tensor'):
         return nodes
 
     # Begin traversal from the provided tensor.
-    return depth_first_search(tensor, set(), [])
+    return reversed(depth_first_search(tensor, set(), []))
 
 
 def backward(tensor: 'Tensor') -> 'Tensor':
@@ -59,7 +55,8 @@ def backward(tensor: 'Tensor') -> 'Tensor':
     
     This function computes the gradients of all tensors that were involved in the 
     computation of the given tensor, using the chain rule. It assumes that the tensor 
-    for which it is called is a scalar (i.e., its shape is ()).
+    for which it is called is a scalar (i.e., its shape is ()). The function is to be
+    applied to the model cost/loss.
     
     Consider the above toy example. The backward pass involves the following steps:
     
@@ -96,8 +93,8 @@ def backward(tensor: 'Tensor') -> 'Tensor':
     # Start with the gradient of the output tensor (child of all children from forward pass perspective) set to 1.
     tensor.grad = Tensor(1, requires_grad=False)
 
-    # Traverse the graph in reverse order.
-    for t0 in reversed(_collect_backward_graph(tensor)):
+    # Traverse the backward graph
+    for t0 in _collect_backward_graph(tensor):
         assert t0.grad is not None
 
         # Compute gradients for the current tensor.
@@ -108,14 +105,16 @@ def backward(tensor: 'Tensor') -> 'Tensor':
         for parent, grad in zip(t0._ctx.parents, grads):
             if grad is not None and parent.requires_grad:
                 """
-                4. Updating gradients of parent tensors from forward pass perspective (next in the iteration):
+                Updating gradients of parent tensors (future iterations) from forward pass perspective:
+
                 For each tensor in the graph, its gradient is calculated based on the operation
                 that created it. This gradient calculation uses the gradients of the 'child' tensor
                 (the current tensor in the loop) to determine the gradients of its 'parent' tensors 
                 (the tensors that contributed to its creation in the forward pass, next in the loop).
+
                 If a parent tensor contributes to multiple operations (nodes in the graph), its 
                 gradient is the sum of gradients from each of these contributions. This summation 
-                is a key aspect of the chain rule in differentiation and ensures that gradients
+                is a key aspect of the chain rule and ensures that gradients
                 accumulate correctly in cases of branched computations.
                 """
                 parent.grad = grad if parent.grad is None else (parent.grad + grad)
@@ -124,7 +123,7 @@ def backward(tensor: 'Tensor') -> 'Tensor':
         del t0._ctx
 
     """
-    The process cconcludes when all tensors in the graph have had their gradients computed
+    The process concludes when all tensors in the graph have had their gradients computed
     and updated. The final gradients on the input tensors (parameters) can now be used
     to perform optimization steps, such as gradient descent, to improve the model based
     on the computed gradients.
