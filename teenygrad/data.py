@@ -7,6 +7,8 @@ The ops are executed immediately on the CPU using numpy. This approach contrasts
 analyze subsequent delayed operations in order to find an optimized equivalent final optimization at the point where
 execution is actually required. The deferred model is common in industrial-scale libraries.
 
+If you would like to use another backend for storing and computing data, it would need to be implemented here.
+
 """
 from typing import Tuple
 import numpy as np

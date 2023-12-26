@@ -1,19 +1,17 @@
 # inspired by https://github.com/karpathy/micrograd/blob/master/micrograd/engine.py
 from __future__ import annotations
 import time, math
-from typing import List, Tuple, Optional, ClassVar, Union, Sequence, Any, Iterable, Set
+from typing import List, Tuple, Optional, ClassVar, Union, Sequence, Any, Iterable
 from collections import defaultdict
-from functools import reduce
-from itertools import accumulate
 import numpy as np
 
-from teenygrad.helpers import argfix, make_pair, getenv, DEBUG, flatten, DType, dtypes, prod, all_int, round_up, shape_int
+from teenygrad.helpers import argfix, getenv, DEBUG, flatten, DType, dtypes, prod, all_int, round_up, shape_int
 from teenygrad.data import TensorData
 from teenygrad.ops import LoadOps
 from teenygrad.function import Function
 import teenygrad.function as function
 
-from teenygrad.tensor_autograd_engine import backward
+from teenygrad.tensor_autograd import backward
 from teenygrad.tensor_auxiliary import assign
 from teenygrad.tensor_auxiliary import randn, randint, normal, uniform, scaled_uniform
 from teenygrad.tensor_auxiliary import multinomial, gather, cat, stack, repeat, chunk, squeeze, unsqueeze
@@ -68,13 +66,10 @@ class Tensor:
 
     def __repr__(self):
         return f"<Tensor {self.data!r} with grad {(self.grad.data if self.grad else None)!r}>"
-
     # Python has a non moving garbage collector, so this should be okay
     def __hash__(self): return id(self)
-
     @property
     def shape(self) -> Tuple[shape_int, ...]: return self.data.shape
-
     @property
     def dtype(self) -> DType: return self.data.dtype
 
@@ -86,7 +81,6 @@ class Tensor:
     # basic tensor manipulations 
 
     def detach(self) -> Tensor: return Tensor(self.data, requires_grad=False)
-
     def numpy(self) -> np.ndarray:
         assert all_int(self.shape), f"no numpy if shape is symbolic, {self.shape=}"
         assert self.dtype.np is not None, f"no numpy dtype for {self.dtype}"
@@ -140,23 +134,15 @@ class Tensor:
 
     @staticmethod
     def randn(*shape, dtype:Optional[DType]=None, **kwargs) -> Tensor: return randn(*shape, dtype=dtype, **kwargs)
-        # https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
-        #src = Tensor.rand(2, *shape, **kwargs)
-        #return src[0].mul(2*math.pi).cos().mul((1 - src[1]).log().mul(-2).sqrt()).cast(Tensor.default_type if dtype is None else dtype)
-
     @staticmethod
     def randint(*shape, low=0, high=10, **kwargs) -> Tensor: return randint(*shape, low=low, high=high, **kwargs) 
-
     @staticmethod
     def normal(*shape, mean=0.0, std=1.0, **kwargs) -> Tensor:  return normal(*shape, mean=mean, std=std, **kwargs) 
-
     @staticmethod
     def uniform(*shape, low=0.0, high=1.0, **kwargs) -> Tensor:
         return uniform(*shape, low=low, high=high, **kwargs)
-
     @staticmethod
     def scaled_uniform(*shape, **kwargs) -> Tensor: return scaled_uniform(*shape, **kwargs)
-
     def multinomial(self:Tensor, num_samples:int = 1, replacement:bool = False) -> Tensor:
         return multinomial(self, num_samples, replacement)
 
@@ -280,15 +266,10 @@ class Tensor:
 
     @staticmethod
     def stack(tensors, dim=0) -> Tensor: stack(tensors, dim)
-
     def repeat(self, repeats) -> Tensor: repeat(self, repeats)
-
     def chunk(self, num:int, dim:int=0) -> List[Tensor]: chunk(self, num, dim)
-
     def squeeze(self, dim=None) -> Tensor: squeeze(self, dim)
-
     def unsqueeze(self, dim) -> Tensor: return unsqueeze(self, dim)
-
     # (padding_left, padding_right, padding_top, padding_bottom)
     def pad2d(self, padding:Union[List[int], Tuple[int, ...]], value:float=0) -> Tensor: return pad2d(self, padding, value)
 
