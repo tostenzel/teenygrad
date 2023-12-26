@@ -39,7 +39,7 @@ def _pool(tensor: 'Tensor', k_:Tuple[shape_int, ...], stride:Union[Tuple[int, ..
 def avg_pool2d(tensor: 'Tensor', kernel_size, stride, dilation): return tensor._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).mean(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
 def max_pool2d(tensor: 'Tensor', kernel_size, stride, dilation): return tensor._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).max(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
 
-wino = int(getenv("WINO", "0"))
+#wino = int(getenv("WINO", "0"))
 def conv2d(tensor: 'Tensor', weight:'Tensor', bias:Optional['Tensor']=None, groups=1, stride=1, dilation=1, padding=0) -> 'Tensor':
     from teenygrad.tensor import Tensor
     (bs,cin_), (cout,cin), HW = tensor.shape[:2], weight.shape[:2], weight.shape[2:]

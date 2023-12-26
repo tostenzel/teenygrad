@@ -18,6 +18,9 @@ from teenygrad.tensor_combine_segment import cat, stack, repeat, chunk
 from teenygrad.tensor_reshape import reshape, expand, permute, flip, shrink, pad, pad2d, transpose, flatten, squeeze, unsqueeze
 from teenygrad.tensor_nn import _pool, avg_pool2d, max_pool2d, conv2d, linear, binary_crossentropy, binary_crossentropy_logits, sparse_categorical_crossentropy
 from teenygrad.tensor_index_slice import __getitem__, __setitem__, slice, gather
+from teenygrad.tensor_broadcasted_binary_mlops import _broadcasted, _to_float, add, sub, mul, div, pow, matmul, maximum, minimum, where
+
+
 
 class Tensor:
     __slots__ = "data", "requires_grad", "grad", "_ctx"
@@ -188,7 +191,7 @@ class Tensor:
 
     # ------------------------------------------------------------------------------------------------------------------
     # tensor_index_slice.py
-    # ***** movement high level ops *****
+    # movement high level ops
 
     def __getitem__(self, val) -> Tensor: # val: Union[int, slice, Tensor, None, Ellipsis, Tuple[Union[int, slice, Tensor, None, Ellipsis], ...]]
         return __getitem__(self, val)
@@ -210,7 +213,7 @@ class Tensor:
     def repeat(self, repeats) -> Tensor: repeat(self, repeats)
     def chunk(self, num:int, dim:int=0) -> List[Tensor]: chunk(self, num, dim)
 
-    # ***** reduce ops *****
+    # reduce ops
 
     def _reduce(self, fxn:Type[Function], axis:Optional[Union[int, Tuple[int, ...]]]=None, keepdim=False) -> Tensor:
         axis_: List[int] = list(range(len(self.shape))) if axis is None else ([axis] if isinstance(axis, int) else list(axis))
@@ -257,7 +260,7 @@ class Tensor:
 
     # ------------------------------------------------------------------------------------------------------------------
     # tensor_nn.py
-    # ***** processing ops *****
+    # processing ops
 
     def _pool(self, k_:Tuple[shape_int, ...], stride:Union[Tuple[int, ...], int]=1, dilation:Union[Tuple[int, ...], int]=1) -> Tensor:
       return _pool(self, k_, stride, dilation)
@@ -266,6 +269,7 @@ class Tensor:
     def avg_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return avg_pool2d(self, kernel_size, stride, dilation)
     def max_pool2d(self, kernel_size=(2,2), stride=None, dilation=1): return max_pool2d(self, kernel_size, stride, dilation)
 
+    wino = int(getenv("WINO", "0"))
     def conv2d(self, weight:Tensor, bias:Optional[Tensor]=None, groups=1, stride=1, dilation=1, padding=0) -> Tensor:
         return conv2d(self, weight, bias, groups, stride, dilation, padding)
     
@@ -292,7 +296,7 @@ class Tensor:
         def fix(x:Tensor): return x.reshape(*ret.shape[0:-2], ret.shape[-2] * ret.shape[-1])[..., -self.shape[axis]:].transpose(axis,-1)
         return fix(ret) + fix(base_add)
 
-    # ***** mlops (unary) *****
+    # mlops (unary)
 
     def neg(self): return function.Neg.apply(self)
     def log(self): return function.Log.apply(self)
@@ -305,74 +309,32 @@ class Tensor:
 
     # ***** activation functions (unary) *****
 
-    # ***** broadcasted binary mlops *****
+    # ------------------------------------------------------------------------------------------------------------------
+    # tensor_bradcasted_binary_mlops.py
+
+    # broadcasted binary mlops
 
     def _broadcasted(self, y:Union[Tensor, float], reverse:bool=False) -> Tuple[Tensor, Tensor]:
-        x: Tensor = self
-        if not isinstance(y, Tensor):
-            if 0 in x.shape: return x, x.full_like(y)
-            y = Tensor(y, requires_grad=False, dtype=self.dtype if self.dtype != dtypes.bool else dtypes.float32)
-        if reverse: x, y = y, x
-        if (xshape:=x.shape) == (yshape:=y.shape): return (x, y)
+        return _broadcasted(self, y, reverse)
 
-        shape_delta = len(xshape) - len(yshape)
-        if shape_delta > 0: y = y.reshape((1,) * shape_delta + yshape)
-        elif shape_delta < 0: x = x.reshape((1,) * -shape_delta + xshape)
-        if (xshape:=x.shape) == (yshape:=y.shape): return (x, y)
+    def _to_float(self, x:Union[Tensor, float]): return _to_float(self, x)
 
-        shape_ret = tuple([max(x, y) for x, y in zip(xshape, yshape)])
-        if xshape != shape_ret: x = x.expand(shape_ret)
-        if yshape != shape_ret: y = y.expand(shape_ret)
-        return (x, y)
+    def add(self, x:Union[Tensor, float], reverse=False) -> Tensor: return add(self, x, reverse)
 
-    def _to_float(self, x:Union[Tensor, float]):
-        return x.data.base.op.arg if isinstance(x, Tensor) and x.data.is_unrealized_contiguous_const() \
-            and not x.requires_grad and self._broadcasted(x)[0].shape == self.shape else x
+    def sub(self, x:Union[Tensor, float], reverse=False) -> Tensor: return sub(self, x, reverse)
 
-    def add(self, x:Union[Tensor, float], reverse=False) -> Tensor:
-        x = self._to_float(x)
-        return function.Add.apply(*self._broadcasted(x, reverse)) if x.__class__ is Tensor or x else self
-    def sub(self, x:Union[Tensor, float], reverse=False) -> Tensor:
-        x = self._to_float(x)
-        return function.Sub.apply(*self._broadcasted(x, reverse)) if x.__class__ is Tensor or x else (-self if reverse else self)
-    def mul(self, x:Union[Tensor, float], reverse=False) -> Tensor:
-        x = self._to_float(x)
-        if x.__class__ is not Tensor and x == 0.0: return function.Zero.apply(self)
-        if x.__class__ is not Tensor and x == -1.0: return -self
-        return function.Mul.apply(*self._broadcasted(x, reverse)) if x.__class__ is Tensor or x != 1.0 else self
-    def div(self, x:Union[Tensor, float], reverse=False) -> Tensor:
-        x = self._to_float(x)
-        return function.Div.apply(*self._broadcasted(x, reverse)) if x.__class__ is Tensor or reverse or not x or not dtypes.is_float(self.dtype) else self.mul(1/x)
-    def pow(self, x:Union[Tensor, float], reverse=False) -> Tensor:
-        x = self._to_float(x)
-        if x.__class__ is not Tensor and not reverse:
-            # simple pow identities
-            if x < 0: return self.reciprocal().pow(-x)
-            if x == 3.0: return self*self*self
-            if x == 2.0: return self*self
-            if x == 1.0: return self
-            if x == 0.5: return self.sqrt()
-        if not isinstance(x, Tensor) and reverse and x > 0: return self.mul(math.log(x)).exp()
-        ar = self.abs().log().mul(x).exp() if not reverse or isinstance(x, Tensor) else self.mul(math.log(abs(x))).exp()
-        # correct sign of negative numbers raised to a power (cos has a period of 2pi so we use it here to get the oddness of the power)
-        sign = (x * math.pi).cos() if isinstance(x, Tensor) else math.cos(x * math.pi) if not reverse else (self * math.pi).cos()
-        # we only need to correct the sign if the base is negative
-        base_sign = ((self.sign() if not reverse else x.sign() if isinstance(x, Tensor) else math.copysign(1, x)) - 1) / -2
-        # we need 0 to be positive so we need to correct base_sign when the base is 0
-        base_sign = base_sign - (1.5 * (1 - (self.sign().abs() if not reverse else x.sign().abs() if isinstance(x, Tensor) else abs(int(bool(x))))))
-        # inject nan if the base is negative and the power is not an integer
-        to_nan = (((x - x.trunc()) * 1e10).abs().clip(0, 1) if isinstance(x, Tensor) else int(bool(x - int(x))) if not reverse else ((self - self.trunc()) * 1e10).abs().clip(0, 1)) * base_sign
-        inject_nan = ((((-to_nan) * 2) + 1)).log().add(1) if isinstance(to_nan, Tensor) else 1 if not to_nan else float("nan")
-        return ar.mul(sign * base_sign + (1 - base_sign)).mul(inject_nan)
-    def matmul(self, x:Tensor, reverse=False) -> Tensor: return x.dot(self) if reverse else self.dot(x)
+    def mul(self, x:Union[Tensor, float], reverse=False) -> Tensor: return mul(self, x, reverse)
+
+    def div(self, x:Union[Tensor, float], reverse=False) -> Tensor: return div(self, x, reverse)
+    
+    def pow(self, x:Union[Tensor, float], reverse=False) -> Tensor: return pow(self, x, reverse)
+
+    def matmul(self, x:Tensor, reverse=False) -> Tensor: return matmul(self, x, reverse)
 
     def maximum(self, x:Union[Tensor, float]) -> Tensor: return (self<x).detach().where(x, (self>x).detach().where(self, (self+x)/2))
     def minimum(self, x:Union[Tensor, float]) -> Tensor: return -((-self).maximum(-x))
 
-    def where(self:Tensor, input_:Union[Tensor, float], other:Union[Tensor, float]):
-        x_,y = self._broadcasted(input_)
-        x,z = x_._broadcasted(other)
-        return function.Where.apply(x, *y._broadcasted(z))
+    def where(self:Tensor, input_:Union[Tensor, float], other:Union[Tensor, float]): return where(self, input_, other)
 
     # ***** op wrappers (wasted lines to make the typechecker happy) *****
 
