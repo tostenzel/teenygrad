@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import List, Set
 
 
-def _collect_backward_graph(tensor: 'Tensor'):
+def collect_backward_graph(tensor: 'Tensor'):
     """Collects tensors involved in the computational graph of the given tensor in backward pass order.
 
     This function performs a depth-first search to traverse the graph from the provided tensor to its origins.
@@ -95,7 +95,7 @@ def backward(tensor: 'Tensor') -> 'Tensor':
     tensor.grad = Tensor(1, requires_grad=False)
 
     # Traverse the backward graph
-    for t0 in _collect_backward_graph(tensor):
+    for t0 in collect_backward_graph(tensor):
         assert t0.grad is not None
 
         # Compute gradients for the current tensor

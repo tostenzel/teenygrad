@@ -36,16 +36,22 @@ def pad2d(tensor: 'Tensor', padding:Union[List[int], Tuple[int, ...]], value:flo
     return tensor.slice([(0,s) for s in tensor.shape[:-(len(padding)//2)]] + slc, value=value)
 
 
-# NOTE: using slice is discouraged and things should migrate to pad and shrink
-def slice(tensor: 'Tensor', arg:Sequence[Optional[Tuple[int, shape_int]]], value:float) -> 'Tensor':
-    arg_ = tuple([a if a is not None else (0,s) for s,a in zip(tensor.shape, arg)])
-    padding = tuple([(max(0, -p[0]), max(0, p[1]-tensor.shape[i])) for i,p in enumerate(arg_)])
-    return pad(tensor, padding, value=value).shrink(tuple([(p[0] + padding[i][0], p[1] + padding[i][0]) for i,p in enumerate(arg_)]))
-    # FIXME: tensor.pad(padding, value=value)... returns None...
-
 def transpose(tensor: 'Tensor', ax1, ax2) -> 'Tensor':
     order = list(range(len(tensor.shape)))
     order[ax1], order[ax2] = order[ax2], order[ax1]
     return tensor.permute(order)
 
 def flatten(tensor: 'Tensor', start_dim): return tensor.reshape(shape=tensor.shape[:start_dim] + (-1,))
+
+
+def squeeze(tensor: 'Tensor', dim) -> 'Tensor':
+    if dim is None: return tensor if 1 not in tensor.shape else tensor.reshape(*[size for size in tensor.shape if size != 1])
+    if dim <= 0 and tensor.ndim == 0: return tensor # This is to match PyTorch behavior
+    if not -tensor.ndim <= dim < tensor.ndim: raise IndexError(f"Dimension out of range (expected to be in range of [{-tensor.ndim if tensor.ndim > 0 else tensor.ndim-1}, {tensor.ndim-1 if tensor.ndim > 0 else tensor.ndim}], but got {dim})")
+    if dim < 0: dim += tensor.ndim
+    return tensor if tensor.shape[dim] != 1 else tensor.reshape(*[size for idx, size in enumerate(tensor.shape) if idx != dim])
+
+
+def unsqueeze(tensor: 'Tensor', dim) -> 'Tensor':
+    if dim < 0: dim = len(tensor.shape) + dim + 1
+    return tensor.reshape(tensor.shape[:dim] + (1,) + tensor.shape[dim:])
