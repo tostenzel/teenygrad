@@ -1,6 +1,6 @@
 # inspired by https://github.com/karpathy/micrograd/blob/master/micrograd/engine.py
 from __future__ import annotations
-import time, math
+import time
 from typing import List, Tuple, Optional, ClassVar, Union, Sequence, Any
 import numpy as np
 
@@ -19,6 +19,7 @@ from teenygrad.tensor_reshape import reshape, expand, permute, flip, shrink, pad
 from teenygrad.tensor_nn import _pool, avg_pool2d, max_pool2d, conv2d, linear, binary_crossentropy, binary_crossentropy_logits, sparse_categorical_crossentropy
 from teenygrad.tensor_index_slice import __getitem__, __setitem__, slice, gather
 from teenygrad.tensor_broadcasted_binary_mlops import _broadcasted, _to_float, add, sub, mul, div, pow, matmul, maximum, minimum, where
+from teenygrad.tensor_reduce import _reduce, tsum, tmax, tmin, mean, std, _softmax, softmax, log_softmax, argmax, argmin
 
 
 class Tensor:
@@ -50,13 +51,17 @@ class Tensor:
 
         if isinstance(data, TensorData):
             assert dtype is None or dtype == data.dtype, "dtype doesn't match, and casting isn't supported"
+
         elif isinstance(data, (int, float)):
             data = TensorData.loadop(LoadOps.CONST, tuple(), dtype or Tensor.default_type, data)
+
         elif data is None or data.__class__ is list:
             assert dtype is None or dtype.np is not None, f"{dtype} doesn't have a numpy dtype"
             data = TensorData(np.array([] if data is None else data, dtype=(dtype or Tensor.default_type).np))
+
         elif isinstance(data, bytes):
             data = TensorData(np.frombuffer(data, np.uint8))
+
         elif isinstance(data, np.ndarray):
             assert dtype is None or dtype.np is not None, f"{dtype} doesn't have a numpy dtype"
             if data.shape == ():
@@ -218,47 +223,21 @@ class Tensor:
     # reduce ops
 
     def _reduce(self, fxn:Type[Function], axis:Optional[Union[int, Tuple[int, ...]]]=None, keepdim=False) -> Tensor:
-        axis_: List[int] = list(range(len(self.shape))) if axis is None else ([axis] if isinstance(axis, int) else list(axis))
-        axis_ = [x if x >= 0 else x+len(self.shape) for x in axis_]
-        shape = tuple(s for i,s in enumerate(self.shape) if i not in axis_)
-        if 0 in self.shape and 0 not in shape: return Tensor.full(tuple(1 if s == 0 else s for s in self.shape) if keepdim else shape, {function.Sum: 0, function.Max: -float("inf")}[fxn])
-        ret = fxn.apply(self, new_shape=tuple([1 if i in axis_ else s for i,s in enumerate(self.shape)]))
-        return ret if keepdim else ret.reshape(shape=shape)
+        return _reduce(self, fxn, axis, keepdim)
 
-    def sum(self, axis=None, keepdim=False): return self._reduce(function.Sum, axis, keepdim)
-    def max(self, axis=None, keepdim=False): return self._reduce(function.Max, axis, keepdim)
-    def min(self, axis=None, keepdim=False): return -((-self).max(axis=axis, keepdim=keepdim))
+    def sum(self, axis=None, keepdim=False): return tsum(self, axis, keepdim)
+    def max(self, axis=None, keepdim=False): return tmax(self, axis, keepdim)
+    def min(self, axis=None, keepdim=False): return tmin(self, axis, keepdim)
 
-    def mean(self, axis=None, keepdim=False):
-        assert all_int(self.shape), "does not support symbolic shape"
-        out = self.sum(axis=axis, keepdim=keepdim)
-        return out.mul(prod(out.shape)/prod(self.shape)) if 0 not in self.shape else out
-    def std(self, axis=None, keepdim=False, correction=1):
-        assert all_int(self.shape), "does not support symbolic shape"
-        square_sum = ((self - self.mean(axis=axis, keepdim=True)).square()).sum(axis=axis, keepdim=keepdim)
-        return square_sum.div(prod(self.shape)/prod(square_sum.shape)-correction).sqrt()
-    def _softmax(self, axis):
-        m = self - self.max(axis=axis, keepdim=True)
-        e = m.exp()
-        return m, e, e.sum(axis=axis, keepdim=True)
+    def mean(self, axis=None, keepdim=False): return mean(self, axis, keepdim)
+    def std(self, axis=None, keepdim=False, correction=1): return std(self, axis, keepdim, correction)
 
-    def softmax(self, axis=-1):
-        _, e, ss = self._softmax(axis)
-        return e.div(ss)
+    def _softmax(self, axis): return _softmax(self, axis)
+    def softmax(self, axis=-1): return softmax(self, axis)
+    def log_softmax(self, axis=-1): return log_softmax(self, axis)
 
-    def log_softmax(self, axis=-1):
-        m, _, ss = self._softmax(axis)
-        return m - ss.log()
-
-    def argmax(self, axis=None, keepdim=False):
-        if axis is None:
-            idx = (self == self.max(axis)) * Tensor.arange(prod(self.shape)-1,-1,-1, dtype=dtypes.int32, requires_grad=False).reshape(self.shape)
-            return prod(self.shape) - idx.max() - 1
-        axis = axis + len(self.shape) if axis < 0 else axis
-        m = self == self.max(axis=axis, keepdim=True)
-        idx = m * Tensor.arange(self.shape[axis]-1,-1,-1, dtype=dtypes.int32, requires_grad=False).reshape(self.shape[axis], *[1]*(self.ndim-axis-1))
-        return self.shape[axis]-idx.max(axis=axis, keepdim=keepdim)-1
-    def argmin(self, axis=None, keepdim=False): return (-self).argmax(axis=axis, keepdim=keepdim)
+    def argmax(self, axis=None, keepdim=False): return argmax(self, axis, keepdim)
+    def argmin(self, axis=None, keepdim=False): return argmin(self, axis, keepdim)
 
     # ------------------------------------------------------------------------------------------------------------------
     # tensor_nn.py
@@ -333,8 +312,9 @@ class Tensor:
 
     def matmul(self, x:Tensor, reverse=False) -> Tensor: return matmul(self, x, reverse)
 
-    def maximum(self, x:Union[Tensor, float]) -> Tensor: return (self<x).detach().where(x, (self>x).detach().where(self, (self+x)/2))
-    def minimum(self, x:Union[Tensor, float]) -> Tensor: return -((-self).maximum(-x))
+    def maximum(self, x:Union[Tensor, float]) -> Tensor: return maximum(self, x)
+
+    def minimum(self, x:Union[Tensor, float]) -> Tensor: return minimum(self, x)
 
     def where(self:Tensor, input_:Union[Tensor, float], other:Union[Tensor, float]): return where(self, input_, other)
 

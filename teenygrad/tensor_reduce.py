@@ -7,30 +7,31 @@ import teenygrad.function as function
 
 # reduce ops
 
-def _reduce(tensor: 'Tensor', fxn:Type[Function], axis:Optional[Union[int, Tuple[int, ...]]]=None, keepdim=False) -> 'Tensor':
+def _reduce(self, fxn:Type[Function], axis:Optional[Union[int, Tuple[int, ...]]], keepdim) -> 'Tensor':
     from teenygrad.tensor import Tensor
-    axis_: List[int] = list(range(len(tensor.shape))) if axis is None else ([axis] if isinstance(axis, int) else list(axis))
-    axis_ = [x if x >= 0 else x+len(tensor.shape) for x in axis_]
-    shape = tuple(s for i,s in enumerate(tensor.shape) if i not in axis_)
-    if 0 in tensor.shape and 0 not in shape: return Tensor.full(tuple(1 if s == 0 else s for s in tensor.shape) if keepdim else shape, {function.Sum: 0, function.Max: -float("inf")}[fxn])
-    ret = fxn.apply(tensor, new_shape=tuple([1 if i in axis_ else s for i,s in enumerate(tensor.shape)]))
+    axis_: List[int] = list(range(len(self.shape))) if axis is None else ([axis] if isinstance(axis, int) else list(axis))
+    axis_ = [x if x >= 0 else x+len(self.shape) for x in axis_]
+    shape = tuple(s for i,s in enumerate(self.shape) if i not in axis_)
+    if 0 in self.shape and 0 not in shape: return Tensor.full(tuple(1 if s == 0 else s for s in self.shape) if keepdim else shape, {function.Sum: 0, function.Max: -float("inf")}[fxn])
+    ret = fxn.apply(self, new_shape=tuple([1 if i in axis_ else s for i,s in enumerate(self.shape)]))
     return ret if keepdim else ret.reshape(shape=shape)
 
-def sum(tensor: 'Tensor', axis=None, keepdim=False): return tensor._reduce(function.Sum, axis, keepdim)
+
+def tsum(tensor: 'Tensor', axis, keepdim): return tensor._reduce(function.Sum, axis, keepdim)
 
 
-def max(tensor: 'Tensor', axis=None, keepdim=False): return tensor._reduce(function.Max, axis, keepdim)
+def tmax(tensor: 'Tensor', axis, keepdim): return tensor._reduce(function.Max, axis, keepdim)
 
 
-def min(tensor: 'Tensor', axis=None, keepdim=False): return -((-tensor).max(axis=axis, keepdim=keepdim))
+def tmin(tensor: 'Tensor', axis, keepdim): return -((-tensor).tmax((-tensor), axis=axis, keepdim=keepdim))
 
 
-def mean(tensor: 'Tensor', axis=None, keepdim=False):
+def mean(tensor: 'Tensor', axis, keepdim):
     assert all_int(tensor.shape), "does not support symbolic shape"
     out = tensor.sum(axis=axis, keepdim=keepdim)
     return out.mul(prod(out.shape)/prod(tensor.shape)) if 0 not in tensor.shape else out
 
-def std(tensor: 'Tensor', axis=None, keepdim=False, correction=1):
+def std(tensor: 'Tensor', axis, keepdim, correction):
     assert all_int(tensor.shape), "does not support symbolic shape"
     square_sum = ((tensor - tensor.mean(axis=axis, keepdim=True)).square()).sum(axis=axis, keepdim=keepdim)
     return square_sum.div(prod(tensor.shape)/prod(square_sum.shape)-correction).sqrt()
@@ -42,12 +43,12 @@ def _softmax(tensor: 'Tensor', axis):
     return m, e, e.sum(axis=axis, keepdim=True)
 
 
-def softmax(tensor: 'Tensor', axis=-1):
+def softmax(tensor: 'Tensor', axis):
     _, e, ss = tensor._softmax(axis)
     return e.div(ss)
 
 
-def log_softmax(tensor: 'Tensor', axis=-1):
+def log_softmax(tensor: 'Tensor', axis):
     m, _, ss = tensor._softmax(axis)
     return m - ss.log()
 
