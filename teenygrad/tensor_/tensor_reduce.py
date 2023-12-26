@@ -59,7 +59,7 @@ def argmax(tensor: 'Tensor', axis=None, keepdim=False):
         return prod(tensor.shape) - idx.max() - 1
     axis = axis + len(tensor.shape) if axis < 0 else axis
     m = tensor == tensor.max(axis=axis, keepdim=True)
-    idx = m * Tensor.arange(tensor.shape[axis]-1,-1,-1, dtype=dtypes.int32, requires_grad=False).reshape(tensor.shape[axis], *[1]*(tensor.ndim-axis-1))
+    idx = m * tensor.arange(tensor.shape[axis]-1,-1,-1, dtype=dtypes.int32, requires_grad=False).reshape(tensor.shape[axis], *[1]*(tensor.ndim-axis-1))
     return tensor.shape[axis]-idx.max(axis=axis, keepdim=keepdim)-1
 
 
