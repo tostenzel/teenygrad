@@ -19,34 +19,6 @@ def assign(tensor, x) -> 'Tensor':
     return tensor
 
 
-# random number generation
-def randn(*shape, dtype:Optional[DType], **kwargs) -> 'Tensor':
-    from teenygrad.tensor import Tensor
-    # https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
-    src = Tensor.rand(2, *shape, **kwargs)
-    return src[0].mul(2*math.pi).cos().mul((1 - src[1]).log().mul(-2).sqrt()).cast(Tensor.default_type if dtype is None else dtype)
-
-
-def randint(*shape, low, high, **kwargs) -> 'Tensor':
-    from teenygrad.tensor import Tensor
-    return (Tensor.rand(*shape, **kwargs)*(high-low)+low).cast(dtypes.int32)
-
-
-def normal(*shape, mean, std, **kwargs) -> 'Tensor':
-    from teenygrad.tensor import Tensor
-    return (std * Tensor.randn(*shape, **kwargs)) + mean
-
-
-def uniform(*shape, low, high, **kwargs) -> 'Tensor':
-    from teenygrad.tensor import Tensor
-    dtype = kwargs.pop("dtype", Tensor.default_type)
-    return ((high-low) * Tensor.rand(*shape, **kwargs)).cast(dtype) + low
-
-
-def scaled_uniform(*shape, **kwargs) -> 'Tensor':
-    from teenygrad.tensor import Tensor
-    return Tensor.uniform(*shape, low=-1.0, high=1.0, **kwargs).mul(prod(shape)**-0.5)
-
 
 # advanced tensor ops
 
@@ -119,6 +91,3 @@ def squeeze(tensor: 'Tensor', dim) -> 'Tensor':
 def unsqueeze(tensor: 'Tensor', dim) -> 'Tensor':
     if dim < 0: dim = len(tensor.shape) + dim + 1
     return tensor.reshape(tensor.shape[:dim] + (1,) + tensor.shape[dim:])
-
-
-

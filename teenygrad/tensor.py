@@ -13,7 +13,9 @@ import teenygrad.function as function
 
 from teenygrad.tensor_autograd import backward
 from teenygrad.tensor_auxiliary import assign
-from teenygrad.tensor_auxiliary import randn, randint, normal, uniform, scaled_uniform
+from teenygrad.tensor_create import _loadop, empty, manual_seed, rand
+from teenygrad.tensor_create import randn, randint, normal, uniform, scaled_uniform
+from teenygrad.tensor_create import full, zeros, ones, arange, eye, full_like, zeros_like, ones_like
 from teenygrad.tensor_auxiliary import multinomial, gather, cat, stack, repeat, chunk, squeeze, unsqueeze
 from teenygrad.tensor_shapes import reshape, expand, permute, flip, shrink, pad, pad2d, slice, transpose, flatten
 from teenygrad.tensor_nn import _pool, avg_pool2d, max_pool2d, conv2d, linear, binary_crossentropy, binary_crossentropy_logits, sparse_categorical_crossentropy
@@ -91,44 +93,39 @@ class Tensor:
 
     @staticmethod
     def _loadop(op, sz, dtype:Optional[DType]=None, arg=None, **kwargs):
-        assert isinstance(sz, int), f"cannot create with symbolic size {sz}"
-        return Tensor(TensorData.loadop(op, (sz,), Tensor.default_type if dtype is None else dtype, arg), dtype=dtype, **kwargs)
+        return _loadop(op, sz, dtype, arg, **kwargs)
 
     @staticmethod
-    def empty(*shape, **kwargs):
-        return Tensor._loadop(LoadOps.EMPTY, prod((shape:=argfix(*shape))), **kwargs).reshape(shape)
+    def empty(*shape, **kwargs): return empty(*shape, **kwargs)
 
     _seed: int = int(time.time())
     @staticmethod
-    def manual_seed(seed=0): Tensor._seed = seed
+    def manual_seed(seed=0): return manual_seed(seed)
 
     @staticmethod
-    def rand(*shape, **kwargs):
-        Tensor._seed += 1
-        return Tensor._loadop(LoadOps.RAND, prod((shape:=argfix(*shape))), arg=Tensor._seed, **kwargs).reshape(shape)
+    def rand(*shape, **kwargs): return rand(*shape, **kwargs)
 
     # ***** creation helper functions *****
 
     @staticmethod
-    def full(shape:Tuple[shape_int, ...], fill_value, **kwargs): return Tensor(fill_value, **kwargs).reshape([1]*len(new_shape := argfix(shape))).expand(new_shape)
+    def full(shape:Tuple[shape_int, ...], fill_value, **kwargs): return full(shape, fill_value, **kwargs)
 
     @staticmethod
-    def zeros(*shape, **kwargs): return Tensor.full(argfix(*shape), 0, **kwargs)
+    def zeros(*shape, **kwargs): return zeros(*shape, **kwargs)
 
     @staticmethod
-    def ones(*shape, **kwargs): return Tensor.full(argfix(*shape), 1, **kwargs)
+    def ones(*shape, **kwargs): return ones(*shape, **kwargs)
 
     @staticmethod
     def arange(start, stop=None, step=1, **kwargs):
-        if stop is None: stop, start = start, 0
-        return Tensor.full((math.ceil((stop-start)/step),), step, **kwargs).cumsum() + (start - step)
+        return arange(start, stop, step, **kwargs)
 
     @staticmethod
-    def eye(dim:int, **kwargs): return Tensor.full((dim,1),1,**kwargs).pad(((0,0),(0,dim))).reshape(dim*(dim+1)).shrink(((0,dim*dim),)).reshape(dim, dim)
+    def eye(dim:int, **kwargs): return eye(dim, **kwargs)
 
-    def full_like(self, fill_value, **kwargs): return Tensor.full(self.shape, fill_value=fill_value, dtype=kwargs.pop("dtype", self.dtype), **kwargs)
-    def zeros_like(self, **kwargs): return self.full_like(0, **kwargs)
-    def ones_like(self, **kwargs): return self.full_like(1, **kwargs)
+    def full_like(self, fill_value, **kwargs): return full_like(self, fill_value, **kwargs)
+    def zeros_like(self, **kwargs): return zeros_like(self, **kwargs)
+    def ones_like(self, **kwargs): return ones_like(self, **kwargs)
 
     # ***** random number generation high level ops *****
 

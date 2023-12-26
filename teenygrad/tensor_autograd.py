@@ -12,7 +12,7 @@ def _collect_backward_graph(tensor: 'Tensor'):
     """Collects tensors involved in the computational graph of the given tensor in backward pass order.
 
     This function performs a depth-first search to traverse the graph from the provided tensor to its origins.
-    It's crucial for backpropagation as it orders tensors in the sequence they were involved in computations.
+    It's crucial for backpropagation as it orders tensors in the reversed sequence they were involved in computations.
 
     Example:
     Consider a computational graph for the function C(θ1, θ2) = θ1 * θ2 + tanh(θ1), with θ1 and θ2 as leaf nodes (inputs).
@@ -32,6 +32,7 @@ def _collect_backward_graph(tensor: 'Tensor'):
 
     Returns:
         List[Tensor]: Tensors in the order they were computed during the forward pass.
+
     """
     def depth_first_search(node: 'Tensor', visited: Set, nodes: List['Tensor']):
         visited.add(node)
@@ -97,13 +98,14 @@ def backward(tensor: 'Tensor') -> 'Tensor':
     for t0 in _collect_backward_graph(tensor):
         assert t0.grad is not None
 
-        # Compute gradients for the current tensor.
+        # Compute gradients for the current tensor
         grads = t0._ctx.backward(t0.grad.data)
         grads = [Tensor(g, requires_grad=False) if g is not None else None
                  for g in ([grads] if len(t0._ctx.parents) == 1 else grads)]
 
         for parent, grad in zip(t0._ctx.parents, grads):
             if grad is not None and parent.requires_grad:
+
                 """
                 Updating gradients of parent tensors (future iterations) from forward pass perspective:
 
@@ -119,7 +121,7 @@ def backward(tensor: 'Tensor') -> 'Tensor':
                 """
                 parent.grad = grad if parent.grad is None else (parent.grad + grad)
 
-        # Clean up to prevent memory leaks.
+        # Clean up to prevent memory leaks
         del t0._ctx
 
     """
