@@ -2,7 +2,7 @@ from typing import Sequence, Optional, Tuple
 from collections import defaultdict
 
 from teenygrad.helpers import shape_int, dtypes
-from teenygrad.tensor_reshape import pad, flatten
+from teenygrad.tensor_.tensor_reshape import pad, flatten
 
 
 # ***** movement high level ops *****
@@ -32,7 +32,7 @@ from teenygrad.tensor_reshape import pad, flatten
 #                - if first Tensor passed in (expand dims) is not at dim 0
 #                - and following Tensors does not follow consecutively to the end of fancy indexing's dims
 def __getitem__(tensor: 'Tensor', val) -> 'Tensor': # val: Union[int, slice, Tensor, None, Ellipsis, Tuple[Union[int, slice, Tensor, None, Ellipsis], ...]]
-    from teenygrad.tensor import Tensor
+    from teenygrad.tensor_ import Tensor
     def normalize_int(e, i, dim_sz):
         if -dim_sz <= e < dim_sz: return e if e != -1 else dim_sz-1
         raise IndexError(f"index {e} is out of bounds for dimension {i} with size {tensor.shape[i]}")
@@ -112,7 +112,7 @@ def slice(tensor: 'Tensor', arg:Sequence[Optional[Tuple[int, shape_int]]], value
     # FIXME: tensor.pad(padding, value=value)... returns None...
 
 def gather(tensor: 'Tensor', idx: 'Tensor', dim: int) -> 'Tensor':
-    from teenygrad.tensor import Tensor
+    from teenygrad.tensor_ import Tensor
     assert idx.ndim == tensor.ndim, "tensor.ndim must equal idx.ndim"
     assert all(s >= i for s,i in zip(tensor.shape, idx.shape)), "all dim of idx.shape must be smaller than tensor.shape"
     if dim < 0: dim += tensor.ndim

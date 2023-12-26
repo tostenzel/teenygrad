@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Tuple, Optional, Sequence, Union, List
+from typing import Tuple, Optional, Union, List
 
 from teenygrad.helpers import argfix, prod, shape_int
 

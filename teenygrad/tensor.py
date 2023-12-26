@@ -10,16 +10,16 @@ from teenygrad.ops import LoadOps
 from teenygrad.function import Function
 import teenygrad.function as function
 
-from teenygrad.tensor_autograd import backward, collect_backward_graph
-from teenygrad.tensor_create import _loadop, empty, manual_seed, rand
-from teenygrad.tensor_create import randn, randint, normal, uniform, scaled_uniform
-from teenygrad.tensor_create import full, zeros, ones, arange, eye, full_like, zeros_like, ones_like
-from teenygrad.tensor_combine_segment import cat, stack, repeat, chunk
-from teenygrad.tensor_reshape import reshape, expand, permute, flip, shrink, pad, pad2d, transpose, flatten, squeeze, unsqueeze
-from teenygrad.tensor_nn import _pool, avg_pool2d, max_pool2d, conv2d, linear, binary_crossentropy, binary_crossentropy_logits, sparse_categorical_crossentropy
-from teenygrad.tensor_index_slice import __getitem__, __setitem__, slice, gather
-from teenygrad.tensor_broadcasted_binary_mlops import _broadcasted, _to_float, add, sub, mul, div, pow, matmul, maximum, minimum, where
-from teenygrad.tensor_reduce import _reduce, tsum, tmax, tmin, mean, std, _softmax, softmax, log_softmax, argmax, argmin
+from teenygrad.autograd import backward, collect_backward_graph
+from teenygrad.tensor_.tensor_create import _loadop, empty, manual_seed, rand
+from teenygrad.tensor_.tensor_create import randn, randint, normal, uniform, scaled_uniform
+from teenygrad.tensor_.tensor_create import full, zeros, ones, arange, eye, full_like, zeros_like, ones_like
+from teenygrad.tensor_.tensor_combine_segment import cat, stack, repeat, chunk
+from teenygrad.tensor_.tensor_reshape import reshape, expand, permute, flip, shrink, pad, pad2d, transpose, flatten, squeeze, unsqueeze
+from teenygrad.tensor_.tensor_nn import _pool, avg_pool2d, max_pool2d, conv2d, linear, binary_crossentropy, binary_crossentropy_logits, sparse_categorical_crossentropy
+from teenygrad.tensor_.tensor_index_slice import __getitem__, __setitem__, slice, gather
+from teenygrad.tensor_.tensor_broadcasted_binary_mlops import _broadcasted, _to_float, add, sub, mul, div, pow, matmul, maximum, minimum, where
+from teenygrad.tensor_.tensor_reduce import _reduce, tsum, tmax, tmin, mean, std, _softmax, softmax, log_softmax, argmax, argmin
 
 
 class Tensor:
@@ -286,9 +286,9 @@ class Tensor:
     def sigmoid(self): return function.Sigmoid.apply(self)
     def sqrt(self): return function.Sqrt.apply(self)
 
-    # ***** math functions (unary) *****
+    # math functions (unary) skipped
 
-    # ***** activation functions (unary) *****
+    # activation functions (unary) skipped
 
     # ------------------------------------------------------------------------------------------------------------------
     # tensor_bradcasted_binary_mlops.py
@@ -301,24 +301,17 @@ class Tensor:
     def _to_float(self, x:Union[Tensor, float]): return _to_float(self, x)
 
     def add(self, x:Union[Tensor, float], reverse=False) -> Tensor: return add(self, x, reverse)
-
     def sub(self, x:Union[Tensor, float], reverse=False) -> Tensor: return sub(self, x, reverse)
-
     def mul(self, x:Union[Tensor, float], reverse=False) -> Tensor: return mul(self, x, reverse)
-
-    def div(self, x:Union[Tensor, float], reverse=False) -> Tensor: return div(self, x, reverse)
-    
     def pow(self, x:Union[Tensor, float], reverse=False) -> Tensor: return pow(self, x, reverse)
-
+    def div(self, x:Union[Tensor, float], reverse=False) -> Tensor: return div(self, x, reverse)
     def matmul(self, x:Tensor, reverse=False) -> Tensor: return matmul(self, x, reverse)
 
     def maximum(self, x:Union[Tensor, float]) -> Tensor: return maximum(self, x)
-
     def minimum(self, x:Union[Tensor, float]) -> Tensor: return minimum(self, x)
-
     def where(self:Tensor, input_:Union[Tensor, float], other:Union[Tensor, float]): return where(self, input_, other)
 
-    # ***** op wrappers (wasted lines to make the typechecker happy) *****
+    # op wrappers (wasted lines to make the typechecker happy)
 
     def __neg__(self) -> Tensor: return self.neg()
 
@@ -350,7 +343,7 @@ class Tensor:
     def __ne__(self, x) -> Tensor: return (self<x) + (self>x)     # type: ignore
     def __eq__(self, x) -> Tensor: return 1.0-(self != x)             # type: ignore
 
-    # ***** functional nn ops *****
+    # functional nn ops
 
     def linear(self, weight:Tensor, bias:Optional[Tensor]=None): return linear(self, weight, bias)
 
@@ -358,9 +351,10 @@ class Tensor:
 
     def binary_crossentropy_logits(self, y:Tensor) -> Tensor: return binary_crossentropy_logits(self, y)
 
-    def sparse_categorical_crossentropy(self, Y, ignore_index=-1) -> Tensor: return sparse_categorical_crossentropy(self, Y, ignore_index)
+    def sparse_categorical_crossentropy(self, Y, ignore_index=-1) -> Tensor:
+        return sparse_categorical_crossentropy(self, Y, ignore_index)
 
-    # ***** cast ops *****
+    # cast ops
 
     def cast(self, dtype:DType) -> Tensor: return function.Cast.apply(self, dtype=dtype) if self.dtype != dtype else self
     def bitcast(self, dtype:DType) -> Tensor:
@@ -369,7 +363,7 @@ class Tensor:
     def float(self) -> Tensor: return self.cast(dtypes.float32)
     def half(self) -> Tensor: return self.cast(dtypes.float16)
 
-    # ***** convenience stuff *****
+    # convenience stuff
 
     @property
     def ndim(self) -> int: return len(self.shape)

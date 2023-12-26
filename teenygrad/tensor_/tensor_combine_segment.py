@@ -8,7 +8,7 @@ from teenygrad.helpers import all_int
 
 
 def cat(tensor, *args, dim) -> 'Tensor':
-    from teenygrad.tensor import Tensor
+    from teenygrad.tensor_ import Tensor
     dim = (dim + len(tensor.shape)) if dim < 0 else dim
     assert all(len(y.shape) == len(tensor.shape) and all(y.shape[i] == s for i,s in enumerate(tensor.shape) if i != dim) for y in args)
     catargs = [tensor, *args]
