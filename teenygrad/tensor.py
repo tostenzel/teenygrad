@@ -21,11 +21,11 @@ from teenygrad.tensor_index_slice import __getitem__, __setitem__, slice, gather
 from teenygrad.tensor_broadcasted_binary_mlops import _broadcasted, _to_float, add, sub, mul, div, pow, matmul, maximum, minimum, where
 
 
-
 class Tensor:
     __slots__ = "data", "requires_grad", "grad", "_ctx"
     __deletable__ = ('_ctx',)
     training: ClassVar[bool] = False
+
     class train:
         def __init__(self, val=True): self.val = val
         def __enter__(self): self.prev, Tensor.training = Tensor.training, self.val
@@ -37,6 +37,7 @@ class Tensor:
     def __init__(self, data:Union[None, int, float, list, TensorData, np.ndarray, bytes], dtype:Optional[DType]=None, requires_grad:Optional[bool]=None):
         
         assert dtype is None or isinstance(dtype, DType), f"invalid dtype {dtype}"
+
         # tensors have gradients, buffers do not
         self.grad: Optional[Tensor] = None
 
@@ -46,7 +47,9 @@ class Tensor:
 
         # internal variables used for autograd graph construction
         self._ctx: Optional[Function] = None
-        if isinstance(data, TensorData): assert dtype is None or dtype == data.dtype, "dtype doesn't match, and casting isn't supported"
+
+        if isinstance(data, TensorData):
+            assert dtype is None or dtype == data.dtype, "dtype doesn't match, and casting isn't supported"
         elif isinstance(data, (int, float)):
             data = TensorData.loadop(LoadOps.CONST, tuple(), dtype or Tensor.default_type, data)
         elif data is None or data.__class__ is list:
@@ -182,7 +185,6 @@ class Tensor:
     def shrink(self, arg:Tuple[Optional[Tuple[shape_int, shape_int]], ...]) -> Tensor: return shrink(self, arg)
     def squeeze(self, dim=None) -> Tensor: squeeze(self, dim)
     def unsqueeze(self, dim) -> Tensor: return unsqueeze(self, dim)
-
 
     @property
     def T(self) -> Tensor: return self.transpose()

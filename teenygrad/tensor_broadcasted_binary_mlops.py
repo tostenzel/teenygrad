@@ -7,7 +7,9 @@ import math
 from teenygrad.helpers import dtypes
 import teenygrad.function as function
 
-# ***** broadcasted binary mlops *****
+
+# ----------------------------------------------------------------------------------------------------------------------
+# broadcasted binary mlops
 
 def _broadcasted(tensor: 'Tensor', y:Union['Tensor', float], reverse:bool=False) -> Tuple['Tensor', 'Tensor']:
     from teenygrad.tensor import Tensor

@@ -1,13 +1,11 @@
-# inspired by https://github.com/karpathy/micrograd/blob/master/micrograd/engine.py
 from __future__ import annotations
 import math
 from typing import Tuple, Optional, Union
 
-from teenygrad.helpers import make_pair, getenv, flatten, dtypes, all_int, shape_int
+from teenygrad.helpers import make_pair, flatten, dtypes, all_int, shape_int
 
 
-
-# ***** processing ops *****
+# processing ops
 
 def _pool(tensor: 'Tensor', k_:Tuple[shape_int, ...], stride:Union[Tuple[int, ...], int], dilation:Union[Tuple[int, ...], int]) -> 'Tensor':
     assert len(tensor.shape) >= len(k_), f"can't pool {tensor.shape} with {k_}"
@@ -36,8 +34,13 @@ def _pool(tensor: 'Tensor', k_:Tuple[shape_int, ...], stride:Union[Tuple[int, ..
     return xup.permute(*range(len(prefix)), *[len(prefix)+i*2 for i in range(len(k_))], *[len(prefix)+i*2+1 for i in range(len(k_))])
 
 # NOTE: these work for more than 2D
-def avg_pool2d(tensor: 'Tensor', kernel_size, stride, dilation): return tensor._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).mean(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
-def max_pool2d(tensor: 'Tensor', kernel_size, stride, dilation): return tensor._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).max(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
+def avg_pool2d(tensor: 'Tensor', kernel_size, stride, dilation):
+    return tensor._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).mean(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
+
+
+def max_pool2d(tensor: 'Tensor', kernel_size, stride, dilation):
+    return tensor._pool(make_pair(kernel_size), stride if stride is not None else kernel_size, dilation).max(axis=tuple(range(0-len(make_pair(kernel_size)), 0)))
+
 
 #wino = int(getenv("WINO", "0"))
 def conv2d(tensor: 'Tensor', weight:'Tensor', bias:Optional['Tensor']=None, groups=1, stride=1, dilation=1, padding=0) -> 'Tensor':
@@ -59,7 +62,8 @@ def conv2d(tensor: 'Tensor', weight:'Tensor', bias:Optional['Tensor']=None, grou
         return ret if bias is None else ret.add(bias.reshape(1, -1, *[1] * len(HW)))
 
 
-# ***** functional nn ops *****
+# ----------------------------------------------------------------------------------------------------------------------
+# functional nn ops
 
 def linear(tensor: 'Tensor', weight:'Tensor', bias:Optional['Tensor']=None):
     x = tensor.mul(weight) if len(weight.shape) == 1 else tensor.dot(weight)
