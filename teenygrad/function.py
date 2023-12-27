@@ -1,7 +1,9 @@
 """Contains the core differentiable functions with forward and backward passes.
 
-These functions are compositions of basic numpy operations wrapped in data.TensorData methods.
-Many other methods in the tensor.Tensor class are composed of these functions and can therefore be
+These functions ("mid-level ops") are compositions of basic numpy operations wrapped in data.TensorData methods
+("low-level ops").
+
+Many other methods in the tensor.Tensor class ("high-level ops") are composed of these functions and can therefore be
 backpropagated, too.
 
 All these functions are applied to and return TensorData objects that can be called with Tensor.data.

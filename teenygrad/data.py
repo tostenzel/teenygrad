@@ -1,13 +1,14 @@
 """Defines the TensorData class, a container for tensor data (tensor.Tensor.data), represented as numpy arrays.
 
-It facilitates direct manipulation of tensor data through a range of basic operations. These operations are building
-blocks for defining forward and backward passes of differentiable function.Functions.
+It facilitates direct manipulation of tensor data through a range of basic operation ("low-level ops"). These
+operations are building blocks for defining forward and backward passes of differentiable function.Functions.
+("mid-level ops")
 
 The ops are executed immediately on the CPU using numpy. This approach contrasts with deferred computation models that
 analyze subsequent delayed operations in order to find an optimized equivalent final optimization at the point where
 execution is actually required. The deferred model is common in industrial-scale libraries.
 
-If you would like to use another backend for storing and computing data, it would need to be implemented here.
+If you would like to use another backend for storing and computing data, it would need to implement the "llops" here.
 
 """
 from typing import Tuple

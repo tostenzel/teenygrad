@@ -1,3 +1,12 @@
+"""Contain the tensor class that allows you to construct neural networks with forward and backward pass.
+
+The module contains the "high-level ops". These are syntax sugar and built on top of the "mid-level ops" containing the
+the functions with forward and backward passes in Function.function which is build on top of the "low-level ops"
+defining the numpy backend with the most basic operations in data.TensorData.
+
+The high-level ops support many things that you could expect from a tensor library.
+
+"""
 # inspired by https://github.com/karpathy/micrograd/blob/master/micrograd/engine.py
 from __future__ import annotations
 import time
